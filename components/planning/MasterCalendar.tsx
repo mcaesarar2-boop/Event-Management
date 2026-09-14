@@ -18,6 +18,7 @@ import {
   List,
   Sparkles,
   Info,
+  X,
 } from 'lucide-react';
 import { Event, Task } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
@@ -58,6 +59,7 @@ interface MasterCalendarProps {
   tasks: Task[];
   onSelectEvent: (eventId: string) => void;
   onOpenCreateEvent?: () => void;
+  onNavigateToTimeline?: (eventId: string) => void;
 }
 
 export function MasterCalendar({
@@ -65,11 +67,13 @@ export function MasterCalendar({
   tasks,
   onSelectEvent,
   onOpenCreateEvent,
+  onNavigateToTimeline,
 }: MasterCalendarProps) {
   const [viewMode, setViewMode] = useState<'MONTH' | 'AGENDA'>('MONTH');
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>('ALL');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
   const [selectedDayStr, setSelectedDayStr] = useState<string | null>(null);
+  const [isFloatingPreviewOpen, setIsFloatingPreviewOpen] = useState(false);
 
   // Default month calculation: if events exist, center on the first active event's month
   const defaultDate = useMemo(() => {
@@ -437,6 +441,21 @@ export function MasterCalendar({
     }));
   }, [entriesByDate]);
 
+  // Handle cell click (1st click: highlight date, 2nd click: open floating window preview)
+  const handleCellClick = (dateStr: string) => {
+    if (selectedDayStr === dateStr) {
+      setIsFloatingPreviewOpen(true);
+    } else {
+      setSelectedDayStr(dateStr);
+    }
+  };
+
+  const handleOpenFloatingPreview = (dateStr: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedDayStr(dateStr);
+    setIsFloatingPreviewOpen(true);
+  };
+
   return (
     <div className="space-y-5 pb-12">
       {/* Top Title Banner */}
@@ -608,12 +627,13 @@ export function MasterCalendar({
               return (
                 <div
                   key={cell.dateStr}
-                  onClick={() => setSelectedDayStr(cell.dateStr)}
-                  className={`min-h-[105px] p-2 transition cursor-pointer flex flex-col justify-between group ${
+                  onClick={() => handleCellClick(cell.dateStr)}
+                  onDoubleClick={() => handleOpenFloatingPreview(cell.dateStr)}
+                  className={`min-h-[105px] p-2 transition cursor-pointer flex flex-col justify-between group relative ${
                     !cell.isCurrentMonth
                       ? 'bg-slate-950/40 text-slate-600'
                       : isSelected
-                      ? 'bg-indigo-950/40 ring-1 ring-inset ring-indigo-500'
+                      ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500 shadow-md'
                       : hasShowDay
                       ? 'bg-rose-950/20 hover:bg-rose-950/30'
                       : 'bg-slate-900 hover:bg-slate-850/60'
@@ -647,8 +667,9 @@ export function MasterCalendar({
                     {entries.slice(0, 3).map((entry) => (
                       <div
                         key={entry.id}
-                        title={`${entry.eventCode}: ${entry.label} (${entry.time || ''})`}
-                        className={`text-[10px] px-1.5 py-0.5 rounded border truncate flex items-center gap-1 ${entry.colorClass.bg} ${entry.colorClass.text} ${entry.colorClass.border}`}
+                        onClick={(e) => handleOpenFloatingPreview(cell.dateStr, e)}
+                        title={`${entry.eventCode}: ${entry.label} (${entry.time || ''}) - Klik untuk buka preview`}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border truncate flex items-center gap-1 cursor-pointer hover:brightness-125 transition ${entry.colorClass.bg} ${entry.colorClass.text} ${entry.colorClass.border}`}
                       >
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.colorClass.dot}`}></span>
                         <span className="font-semibold truncate">
@@ -659,15 +680,26 @@ export function MasterCalendar({
                     ))}
 
                     {entries.length > 3 && (
-                      <div className="text-[9px] text-slate-400 font-medium px-1">
-                        +{entries.length - 3} lainnya...
+                      <div
+                        onClick={(e) => handleOpenFloatingPreview(cell.dateStr, e)}
+                        className="text-[9px] text-indigo-400 hover:underline font-medium px-1 cursor-pointer"
+                      >
+                        +{entries.length - 3} lainnya (buka preview)...
                       </div>
                     )}
                   </div>
 
                   {/* Bottom cell subtle indicator */}
-                  <div className="text-[9px] text-slate-600 group-hover:text-slate-400 text-right">
-                    {entries.length > 0 ? 'Klik detail' : ''}
+                  <div className="text-[9px] flex items-center justify-between text-slate-500 group-hover:text-slate-300 mt-1">
+                    <span className="truncate">{isSelected ? 'Klik lagi: Floating Preview' : ''}</span>
+                    {entries.length > 0 && (
+                      <span
+                        onClick={(e) => handleOpenFloatingPreview(cell.dateStr, e)}
+                        className="hover:text-indigo-400 font-semibold hover:underline flex-shrink-0"
+                      >
+                        Preview &rarr;
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -815,10 +847,16 @@ export function MasterCalendar({
                       {entry.type}
                     </span>
                     <button
-                      onClick={() => onSelectEvent(entry.eventId)}
+                      onClick={() => {
+                        if (onNavigateToTimeline) {
+                          onNavigateToTimeline(entry.eventId);
+                        } else {
+                          onSelectEvent(entry.eventId);
+                        }
+                      }}
                       className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center gap-1 shadow-sm"
                     >
-                      <span>Buka Workspace Event</span>
+                      <span>Buka Timeline Event</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -830,6 +868,150 @@ export function MasterCalendar({
               Belum ada event atau task yang jatuh tempo pada {formatDate(selectedDayStr)}.
             </div>
           )}
+        </div>
+      )}
+
+      {/* FLOATING WINDOW OVERVIEW / PREVIEW MODAL */}
+      {isFloatingPreviewOpen && selectedDayStr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-indigo-500/60 rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-100">
+                      Timeline Overview: {formatDate(selectedDayStr)}
+                    </h3>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800 font-semibold">
+                      {selectedEntries.length} Jadwal
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Ringkasan seluruh timeline operasional, D-Day, dan task deadline pada tanggal ini.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsFloatingPreviewOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content List */}
+            {selectedEntries.length === 0 ? (
+              <div className="py-10 text-center">
+                <Info className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                <p className="text-xs text-slate-300 font-medium">Tidak ada timeline terdaftar pada tanggal ini</p>
+                <p className="text-[11px] text-slate-500 mt-1">Anda dapat menambahkan event atau jadwal milestone baru.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {selectedEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`p-4 rounded-xl border transition ${entry.colorClass.bg} ${entry.colorClass.border} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-950 text-indigo-300 border border-slate-800">
+                          {entry.eventCode}
+                        </span>
+                        <span className="text-xs font-bold text-slate-100">
+                          {entry.type === 'EVENT_DAY' ? '★ ' : ''}
+                          {entry.label}
+                        </span>
+                        {entry.type === 'EVENT_DAY' && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold animate-pulse">
+                            SHOW DAY
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-slate-300 font-medium">
+                        {entry.eventName}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 pt-0.5">
+                        {entry.time && (
+                          <span className="flex items-center gap-1 font-mono">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {entry.time}
+                          </span>
+                        )}
+                        {entry.venueName && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400" />
+                            {entry.venueName} {entry.city ? `(${entry.city})` : ''}
+                          </span>
+                        )}
+                        {entry.assignee && (
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3 h-3 text-slate-400" />
+                            PIC: {entry.assignee}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setIsFloatingPreviewOpen(false);
+                        if (onNavigateToTimeline) {
+                          onNavigateToTimeline(entry.eventId);
+                        } else {
+                          onSelectEvent(entry.eventId);
+                        }
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 flex-shrink-0 self-start sm:self-auto"
+                    >
+                      <span>Buka Full View Timeline</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="text-[11px] text-slate-500">
+                Klik tombol di atas untuk membuka tab timeline produksi event terkait.
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFloatingPreviewOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                >
+                  Tutup
+                </button>
+                {selectedEntries[0] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFloatingPreviewOpen(false);
+                      if (onNavigateToTimeline) {
+                        onNavigateToTimeline(selectedEntries[0].eventId);
+                      } else {
+                        onSelectEvent(selectedEntries[0].eventId);
+                      }
+                    }}
+                    className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20"
+                  >
+                    <span>Full View Timeline Event &rarr;</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

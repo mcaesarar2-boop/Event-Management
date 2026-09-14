@@ -20,6 +20,7 @@ import { formatDate, calculateDaysUntil, formatCompactIDR } from '@/lib/utils/fo
 
 export type EventTabType =
   | 'OVERVIEW'
+  | 'TIMELINE'
   | 'BUDGET'
   | 'TALENT'
   | 'PROCUREMENT'
@@ -115,6 +116,7 @@ export function EventDetailHeader({
 
   const tabs: Array<{ id: EventTabType; label: string; badge?: string; badgeColor?: string }> = [
     { id: 'OVERVIEW', label: 'Overview' },
+    { id: 'TIMELINE', label: 'Timeline & Milestones' },
     { id: 'BUDGET', label: 'Budget & Variance' },
     { id: 'TALENT', label: 'Talent & Riders' },
     { id: 'PROCUREMENT', label: 'Vendors & POs' },

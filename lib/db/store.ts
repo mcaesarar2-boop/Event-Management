@@ -19,6 +19,7 @@ import {
   UserAccount,
   EventTemplate,
   EventRequirement,
+  NotificationItem,
   HealthStatus,
   UUID,
 } from '@/lib/types';
@@ -42,6 +43,7 @@ import {
   SEED_DOCUMENTS,
   SEED_AUDIT_LOGS,
   SEED_REQUIREMENTS,
+  SEED_NOTIFICATIONS,
 } from './seed';
 
 // Singleton in-memory relational state
@@ -66,6 +68,7 @@ class EventSystemStore {
   private documents: DocumentItem[] = SEED_DOCUMENTS.filter((d) => !d.eventId || SEED_EVENTS.some((e) => e.id === d.eventId));
   private auditLogs: AuditLogItem[] = SEED_AUDIT_LOGS.filter((a) => !a.eventId || SEED_EVENTS.some((e) => e.id === a.eventId));
   private requirements: EventRequirement[] = SEED_REQUIREMENTS.filter((r) => !r.eventId || SEED_EVENTS.some((e) => e.id === r.eventId));
+  private notifications: NotificationItem[] = [...SEED_NOTIFICATIONS];
   private currentUser: UserAccount = SEED_USERS[0]; // Bima Satria Wardhana (Super Admin)
 
   // Current User / RBAC
@@ -81,6 +84,42 @@ class EventSystemStore {
     return [...this.users];
   }
 
+  // Notifications
+  getNotifications(): NotificationItem[] {
+    return [...this.notifications];
+  }
+
+  markNotificationAsRead(id: UUID): void {
+    const notif = this.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.read = true;
+    }
+  }
+
+  markAllNotificationsAsRead(): void {
+    this.notifications.forEach((n) => {
+      n.read = true;
+    });
+  }
+
+  deleteNotification(id: UUID): void {
+    this.notifications = this.notifications.filter((n) => n.id !== id);
+  }
+
+  clearAllNotifications(): void {
+    this.notifications = [];
+  }
+
+  createNotification(item: Omit<NotificationItem, 'id' | 'createdAt'> & { createdAt?: string }): NotificationItem {
+    const newNotif: NotificationItem = {
+      ...item,
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: item.createdAt || 'Baru saja',
+    };
+    this.notifications.unshift(newNotif);
+    return newNotif;
+  }
+
   // Clients
   getClients(): Client[] {
     return [...this.clients];
@@ -90,19 +129,61 @@ class EventSystemStore {
     return this.clients.find((c) => c.id === id);
   }
 
-  createClient(client: Omit<Client, 'id' | 'totalEvents' | 'activeEvents' | 'completedEvents' | 'totalRevenue' | 'outstandingReceivable'>): Client {
+  createClient(
+    client: Omit<Client, 'id' | 'totalEvents' | 'activeEvents' | 'completedEvents'> & {
+      totalEvents?: number;
+      activeEvents?: number;
+      completedEvents?: number;
+      totalRevenue?: number;
+      outstandingReceivable?: number;
+    }
+  ): Client {
     const newClient: Client = {
-      ...client,
       id: `cli-${Date.now()}`,
-      totalEvents: 0,
-      activeEvents: 0,
-      completedEvents: 0,
-      totalRevenue: 0,
-      outstandingReceivable: 0,
+      company: client.company,
+      contactPerson: client.contactPerson,
+      email: client.email || '',
+      phone: client.phone || '',
+      address: client.address || '',
+      industry: client.industry || 'Corporate',
+      taxInformation: client.taxInformation || '',
+      notes: client.notes || '',
+      totalEvents: client.totalEvents || 0,
+      activeEvents: client.activeEvents || 0,
+      completedEvents: client.completedEvents || 0,
+      totalRevenue: client.totalRevenue || 0,
+      outstandingReceivable: client.outstandingReceivable || 0,
     };
     this.clients.unshift(newClient);
     this.logAudit('CREATE', 'Client', newClient.id, undefined, `Created client ${newClient.company}`);
     return newClient;
+  }
+
+  updateClient(id: UUID, data: Partial<Client>): Client | undefined {
+    const idx = this.clients.findIndex((c) => c.id === id);
+    if (idx === -1) return undefined;
+    const prev = this.clients[idx];
+    const updated: Client = {
+      ...prev,
+      ...data,
+    };
+    this.clients[idx] = updated;
+    this.logAudit(
+      'UPDATE',
+      'Client',
+      id,
+      JSON.stringify({ company: prev.company, contactPerson: prev.contactPerson }),
+      JSON.stringify({ company: updated.company, contactPerson: updated.contactPerson })
+    );
+    return updated;
+  }
+
+  deleteClient(id: UUID): boolean {
+    const idx = this.clients.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    const removed = this.clients.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'Client', id, undefined, `Deleted client ${removed.company}`);
+    return true;
   }
 
   // Venues
@@ -194,6 +275,8 @@ class EventSystemStore {
         technicalPIC: 'Ir. Johanes Handoko',
         creativePIC: 'Nadia Putri',
         salesPIC: this.currentUser.name,
+        safetyOfficer: 'Kapt. Bambang Sudiro',
+        logisticsPIC: 'Eko Prasetyo',
       },
       totalBudget: data.totalBudget || 500000000,
       estimatedCost: 0,
@@ -206,6 +289,7 @@ class EventSystemStore {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       tags: data.tags || [data.type || 'Event'],
+      customMilestones: data.customMilestones || [],
     };
 
     this.events.unshift(newEvent);
@@ -301,6 +385,7 @@ class EventSystemStore {
       this.payments = SEED_PAYMENTS.filter((p) => p.eventId === sampleId);
       this.documents = SEED_DOCUMENTS.filter((d) => d.eventId === sampleId);
       this.requirements = SEED_REQUIREMENTS.filter((r) => r.eventId === sampleId);
+      this.notifications = [...SEED_NOTIFICATIONS];
     }
   }
 
@@ -349,6 +434,34 @@ class EventSystemStore {
         });
       }
     );
+
+    // Seed default milestones to event.customMilestones if not already present
+    const evt = this.events.find((e) => e.id === eventId);
+    if (evt && (!evt.customMilestones || evt.customMilestones.length === 0)) {
+      const eventDayMs = new Date(evt.eventDayDate || evt.startDate).getTime();
+      evt.customMilestones = (tpl.defaultMilestones || []).map((msName, idx) => {
+        const offsetDays = -14 + idx * 2;
+        const msDate = new Date(eventDayMs + offsetDays * 86400000).toISOString().split('T')[0];
+        let cat: any = 'CUSTOM';
+        const lower = msName.toLowerCase();
+        if (lower.includes('load in') || lower.includes('rigging')) cat = 'LOAD_IN';
+        else if (lower.includes('setup') || lower.includes('vendor')) cat = 'SETUP';
+        else if (lower.includes('rehearsal') || lower.includes('sound check') || lower.includes('dry run')) cat = 'REHEARSAL';
+        else if (lower.includes('day') || lower.includes('festival') || lower.includes('conference')) cat = 'SHOW_DAY';
+        else if (lower.includes('strike') || lower.includes('load out')) cat = 'STRIKE';
+
+        return {
+          id: `ms-tpl-${Date.now()}-${idx}`,
+          name: msName,
+          category: cat,
+          date: msDate,
+          time: '10:00',
+          status: 'SCHEDULED',
+          pic: evt.pics?.projectManager || 'Project Manager',
+          notes: `Auto-generated dari template ${tpl.name}`,
+        };
+      });
+    }
   }
 
   private hydrateEventRollup(evt: Event): Event {
@@ -704,6 +817,23 @@ class EventSystemStore {
       }
     });
     return this.getRundown(eventId);
+  }
+
+  updateRundownItem(id: UUID, data: Partial<RundownItem>): RundownItem | undefined {
+    const item = this.rundown.find((r) => r.id === id);
+    if (!item) return undefined;
+    Object.assign(item, data);
+    this.logAudit('UPDATE', 'RundownItem', id, undefined, `Updated rundown segment ${item.segment}`, item.eventId);
+    return item;
+  }
+
+  deleteRundownItem(id: UUID): void {
+    const idx = this.rundown.findIndex((r) => r.id === id);
+    if (idx !== -1) {
+      const item = this.rundown[idx];
+      this.rundown.splice(idx, 1);
+      this.logAudit('DELETE', 'RundownItem', id, undefined, `Deleted rundown segment ${item.segment}`, item.eventId);
+    }
   }
 
   // Risks

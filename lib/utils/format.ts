@@ -7,6 +7,8 @@ export function formatIDR(amount: number = 0): string {
   }).format(amount);
 }
 
+export const formatRupiah = formatIDR;
+
 export function formatCompactIDR(amount: number = 0): string {
   if (isNaN(amount)) return 'Rp 0';
   if (Math.abs(amount) >= 1_000_000_000) {

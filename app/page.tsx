@@ -19,6 +19,7 @@ import {
   PaymentRequest,
   PaymentApprovalStatus,
   TaskStatus,
+  NotificationItem,
 } from '@/lib/types';
 import { Sidebar, NavigationItem } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -28,6 +29,7 @@ import { EventList } from '@/components/events/EventList';
 import { EventCreateModal } from '@/components/events/EventCreateModal';
 import { EventDetailHeader, EventTabType } from '@/components/events/detail/EventDetailHeader';
 import { EventOverviewTab } from '@/components/events/detail/EventOverviewTab';
+import { EventTimelineTab } from '@/components/events/detail/EventTimelineTab';
 import { EventBudgetTab } from '@/components/events/detail/EventBudgetTab';
 import { EventArtistsTab } from '@/components/events/detail/EventArtistsTab';
 import { EventProcurementTab } from '@/components/events/detail/EventProcurementTab';
@@ -83,6 +85,7 @@ export default function HomePage() {
   const requirements = selectedEventId ? db.getRequirements(selectedEventId) : [];
   const risks = selectedEventId ? db.getRisks(selectedEventId) : [];
   const documents = selectedEventId ? db.getDocuments(selectedEventId) : [];
+  const notifications = db.getNotifications();
 
   // Map store payments to PaymentRequest model for the payments tab
   const storePayments = selectedEventId ? db.getPayments(selectedEventId) : [];
@@ -132,6 +135,49 @@ export default function HomePage() {
     if (!selectedEventId) return;
     db.updateEvent(selectedEventId, { status: newStatus });
     triggerUpdate();
+  };
+
+  // Notification Interactive Handlers
+  const handleNotificationClick = (notif: NotificationItem) => {
+    // 1. Mark as read in store
+    db.markNotificationAsRead(notif.id);
+
+    // 2. Interactive Navigation according to notification action
+    if (notif.action) {
+      if (notif.action.eventId) {
+        setSelectedEventId(notif.action.eventId);
+        setCurrentView('EVENTS');
+        if (notif.action.tab) {
+          setActiveTab(notif.action.tab as EventTabType);
+        } else {
+          setActiveTab('OVERVIEW');
+        }
+      } else if (notif.action.view) {
+        setSelectedEventId(undefined);
+        setCurrentView(notif.action.view as NavigationItem);
+      }
+    } else if (notif.eventId) {
+      setSelectedEventId(notif.eventId);
+      setCurrentView('EVENTS');
+      setActiveTab('OVERVIEW');
+    }
+
+    triggerUpdate();
+  };
+
+  const handleMarkAllNotificationsAsRead = () => {
+    db.markAllNotificationsAsRead();
+    triggerUpdate();
+  };
+
+  const handleDeleteNotification = (id: string) => {
+    db.deleteNotification(id);
+    triggerUpdate();
+  };
+
+  const handleViewAllLogs = () => {
+    setSelectedEventId(undefined);
+    setCurrentView('AUDIT_LOGS');
   };
 
   // Create Event Handler
@@ -215,10 +261,32 @@ export default function HomePage() {
     triggerUpdate();
   };
 
+  const handleUpdateRundown = (id: string, data: Partial<RundownItem>) => {
+    db.updateRundownItem(id, data);
+    triggerUpdate();
+  };
+
+  const handleDeleteRundown = (id: string) => {
+    db.deleteRundownItem(id);
+    triggerUpdate();
+  };
+
   const handleReorderRundown = (newOrderedIds: string[]) => {
     if (!selectedEventId) return;
     db.reorderRundown(selectedEventId, newOrderedIds);
     triggerUpdate();
+  };
+
+  // Event Update & Timeline Navigation Handlers
+  const handleUpdateEvent = (id: string, data: Partial<Event>) => {
+    db.updateEvent(id, data);
+    triggerUpdate();
+  };
+
+  const handleNavigateToTimeline = (eventId: string) => {
+    setSelectedEventId(eventId);
+    setCurrentView('EVENTS');
+    setActiveTab('TIMELINE');
   };
 
   // Crew Handlers
@@ -358,6 +426,11 @@ export default function HomePage() {
             setCurrentUser(u);
           }}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          notifications={notifications}
+          onNotificationClick={handleNotificationClick}
+          onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+          onDeleteNotification={handleDeleteNotification}
+          onViewAllLogs={handleViewAllLogs}
         />
 
         {/* Scrollable Work Canvas */}
@@ -391,6 +464,7 @@ export default function HomePage() {
               tasks={db.getTasks()}
               onSelectEvent={handleSelectEvent}
               onOpenCreateEvent={() => setIsCreateModalOpen(true)}
+              onNavigateToTimeline={handleNavigateToTimeline}
             />
           )}
 
@@ -472,6 +546,14 @@ export default function HomePage() {
               onSelectEvent={handleSelectEvent}
               onCreateClient={(c) => {
                 db.createClient(c);
+                setRevision((r) => r + 1);
+              }}
+              onUpdateClient={(id, c) => {
+                db.updateClient(id, c);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteClient={(id) => {
+                db.deleteClient(id);
                 setRevision((r) => r + 1);
               }}
             />
@@ -563,6 +645,19 @@ export default function HomePage() {
                 />
               )}
 
+              {/* Tab: Timeline & Milestones */}
+              {activeTab === 'TIMELINE' && (
+                <EventTimelineTab
+                  event={selectedEvent}
+                  onUpdateEvent={handleUpdateEvent}
+                  onNavigateTab={setActiveTab}
+                  onNavigateView={(view) => {
+                    setSelectedEventId(undefined);
+                    setCurrentView(view as NavigationItem);
+                  }}
+                />
+              )}
+
               {/* Tab 2: Budget & Variance */}
               {activeTab === 'BUDGET' && (
                 <EventBudgetTab
@@ -622,6 +717,8 @@ export default function HomePage() {
                   event={selectedEvent}
                   rundown={rundown}
                   onCreateRundownItem={handleCreateRundown}
+                  onUpdateRundownItem={handleUpdateRundown}
+                  onDeleteRundownItem={handleDeleteRundown}
                   onReorderRundown={handleReorderRundown}
                 />
               )}
@@ -695,6 +792,7 @@ export default function HomePage() {
         clients={db.getClients()}
         venues={db.getVenues()}
         templates={db.getTemplates()}
+        users={db.getUsers()}
         onCreateEvent={handleCreateEvent}
       />
 

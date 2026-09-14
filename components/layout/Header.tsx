@@ -9,13 +9,18 @@ import {
   Sparkles,
   Shield,
   CheckCircle2,
+  CheckCheck,
   AlertTriangle,
+  AlertOctagon,
+  Info,
   Clock,
   Layers,
   ExternalLink,
   Menu,
+  X,
+  ArrowRight,
 } from 'lucide-react';
-import { Event, UserAccount } from '@/lib/types';
+import { Event, UserAccount, NotificationItem } from '@/lib/types';
 import { formatCompactIDR } from '@/lib/utils/format';
 
 interface HeaderProps {
@@ -28,6 +33,11 @@ interface HeaderProps {
   allUsers: UserAccount[];
   onSwitchUser: (user: UserAccount) => void;
   onOpenMobileSidebar?: () => void;
+  notifications?: NotificationItem[];
+  onNotificationClick?: (notif: NotificationItem) => void;
+  onMarkAllNotificationsAsRead?: () => void;
+  onDeleteNotification?: (id: string) => void;
+  onViewAllLogs?: () => void;
 }
 
 export function Header({
@@ -40,6 +50,11 @@ export function Header({
   allUsers,
   onSwitchUser,
   onOpenMobileSidebar,
+  notifications = [],
+  onNotificationClick,
+  onMarkAllNotificationsAsRead,
+  onDeleteNotification,
+  onViewAllLogs,
 }: HeaderProps) {
   // Single active dropdown state ensures mutual exclusivity inside Header
   const [activeDropdown, setActiveDropdown] = useState<'EVENT' | 'NOTIF' | 'USER' | null>(null);
@@ -111,33 +126,13 @@ export function Header({
 
   const selectedEvent = events.find((e) => e.id === selectedEventId);
 
-  // Dynamic notification items
-  const notifications = [
-    {
-      id: 'notif-1',
-      type: 'WARNING',
-      title: 'Budget Overrun Warning',
-      message: 'Pos LED Screen (CVM) mengalami over-budget Rp 15.000.000 pada event UGM Festival.',
-      time: '10m lalu',
-      linkText: 'Review Budget',
-    },
-    {
-      id: 'notif-2',
-      type: 'CRITICAL',
-      title: 'Payment Due in 5 Days',
-      message: 'Pelunasan Sheila On 7 sebesar Rp 225.000.000 jatuh tempo 10 Mei.',
-      time: '1j lalu',
-      linkText: 'Check Payment',
-    },
-    {
-      id: 'notif-3',
-      type: 'INFO',
-      title: 'ERP Logistics Reserved',
-      message: 'L-Acoustics K2 & Subwoofer telah di-reserve oleh ERP Logistik dari Gudang Cakung.',
-      time: '3j lalu',
-      linkText: 'View Requirements',
-    },
-  ];
+  // Notification State & Filtering
+  const [notifFilter, setNotifFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  const notifItems = notifications;
+  const unreadCount = notifItems.filter((n) => !n.read).length;
+  const filteredNotifications = notifFilter === 'UNREAD'
+    ? notifItems.filter((n) => !n.read)
+    : notifItems;
 
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 px-3 sm:px-4 flex items-center justify-between z-20 select-none">
@@ -258,48 +253,195 @@ export function Header({
           <button
             id="notification-bell-btn"
             onClick={() => toggleDropdown('NOTIF')}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition relative"
+            className={`p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition relative ${
+              showNotifications ? 'bg-slate-800 text-slate-200' : ''
+            }`}
+            aria-label="Notification Center"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500"></span>
+            {unreadCount > 0 && (
+              <>
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center border-2 border-slate-900 shadow-sm">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              </>
+            )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-800 rounded-lg shadow-2xl py-2 z-50">
-              <div className="px-3 py-1.5 flex items-center justify-between border-b border-slate-800 text-xs">
-                <span className="font-semibold text-slate-200">Alerts & System Notifications</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-rose-950 text-rose-400 border border-rose-800 rounded">
-                  3 Active
-                </span>
+            <div className="absolute right-0 mt-2 w-80 sm:w-[420px] bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 z-50 overflow-hidden">
+              {/* Header Title & Actions */}
+              <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-200 text-xs">Pusat Notifikasi & Alert</span>
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                      unreadCount > 0
+                        ? 'bg-rose-950/80 text-rose-400 border-rose-800'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {unreadCount > 0 ? `${unreadCount} Belum Dibaca` : 'Semua Terbaca'}
+                  </span>
+                </div>
+
+                {unreadCount > 0 && onMarkAllNotificationsAsRead && (
+                  <button
+                    onClick={() => onMarkAllNotificationsAsRead()}
+                    className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition font-medium hover:underline cursor-pointer"
+                    title="Tandai semua notifikasi telah dibaca"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Tandai Semua Dibaca</span>
+                  </button>
+                )}
               </div>
-              <div className="divide-y divide-slate-800/80 max-h-72 overflow-y-auto">
-                {notifications.map((n) => (
-                  <div key={n.id} className="p-3 text-xs hover:bg-slate-800/50 transition">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-1.5 font-medium text-slate-200">
-                        {n.type === 'CRITICAL' ? (
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                        ) : n.type === 'WARNING' ? (
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                        ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                        )}
-                        <span>{n.title}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400">{n.time}</span>
-                    </div>
-                    <p className="text-slate-400 text-[11px] mt-1">{n.message}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="p-2 border-t border-slate-800 text-center">
-                <span
-                  onClick={closeAllDropdowns}
-                  className="text-[11px] text-indigo-400 hover:underline cursor-pointer"
+
+              {/* Filter Tabs */}
+              <div className="flex items-center px-3.5 py-1.5 bg-slate-950/50 border-b border-slate-800/80 gap-2">
+                <button
+                  onClick={() => setNotifFilter('ALL')}
+                  className={`text-[11px] px-2.5 py-1 rounded-md transition font-medium ${
+                    notifFilter === 'ALL'
+                      ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
                 >
-                  View all system logs & alerts
-                </span>
+                  Semua ({notifItems.length})
+                </button>
+                <button
+                  onClick={() => setNotifFilter('UNREAD')}
+                  className={`text-[11px] px-2.5 py-1 rounded-md transition font-medium flex items-center gap-1.5 ${
+                    notifFilter === 'UNREAD'
+                      ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <span>Belum Dibaca</span>
+                  {unreadCount > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                  )}
+                </button>
+              </div>
+
+              {/* Notification List */}
+              <div className="divide-y divide-slate-800/70 max-h-[380px] overflow-y-auto">
+                {filteredNotifications.length === 0 ? (
+                  <div className="py-8 px-4 text-center">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500/60 mx-auto mb-2" />
+                    <div className="text-xs font-semibold text-slate-300">
+                      {notifFilter === 'UNREAD' ? 'Tidak Ada Notifikasi Baru' : 'Belum Ada Alert Aktif'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
+                      {notifFilter === 'UNREAD'
+                        ? 'Semua notifikasi dan alert penting telah Anda tinjau.'
+                        : 'Semua timeline produksi, anggaran, dan logistik berjalan normal.'}
+                    </div>
+                  </div>
+                ) : (
+                  filteredNotifications.map((n) => {
+                    const isCritical = n.severity === 'CRITICAL';
+                    const isWarning = n.severity === 'WARNING';
+                    const isSuccess = n.severity === 'SUCCESS';
+
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          onNotificationClick?.(n);
+                        }}
+                        className={`p-3 text-xs transition cursor-pointer group relative border-l-2 ${
+                          !n.read
+                            ? 'bg-indigo-950/20 hover:bg-indigo-950/40 border-l-indigo-500'
+                            : 'hover:bg-slate-800/50 border-l-transparent'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            {isCritical ? (
+                              <AlertOctagon className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                            ) : isWarning ? (
+                              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                            ) : isSuccess ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                            ) : (
+                              <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                            )}
+                            <span
+                              className={`transition ${
+                                !n.read
+                                  ? isCritical
+                                    ? 'text-rose-200 font-bold'
+                                    : isWarning
+                                    ? 'text-amber-200 font-bold'
+                                    : 'text-white font-bold'
+                                  : 'text-slate-200 group-hover:text-white'
+                              }`}
+                            >
+                              {n.title}
+                            </span>
+                            {!n.read && (
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="Belum dibaca"></span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-[10px] text-slate-400 font-mono">{n.createdAt}</span>
+                            {onDeleteNotification && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteNotification(n.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition"
+                                title="Hapus notifikasi"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-slate-400 text-[11px] mt-1 leading-relaxed pl-5.5">
+                          {n.message}
+                        </p>
+
+                        <div className="mt-2 pl-5.5 flex flex-wrap items-center justify-between gap-2">
+                          {n.eventName ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono truncate max-w-[220px]">
+                              🏷️ {n.eventName}
+                            </span>
+                          ) : (
+                            <span></span>
+                          )}
+
+                          {n.action && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-400 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-all">
+                              {n.action.label}
+                              <ArrowRight className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-2 border-t border-slate-800 text-center bg-slate-900/90">
+                <button
+                  onClick={() => {
+                    closeAllDropdowns();
+                    onViewAllLogs?.();
+                  }}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-1.5 font-medium transition cursor-pointer"
+                >
+                  <span>Buka Semua Log Aktivitas & Audit Sistem</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
               </div>
             </div>
           )}

@@ -191,10 +191,10 @@ export function EventOverviewTab({
               <p className="text-xs text-slate-400">Key dates from load-in rig to show day and venue strike</p>
             </div>
             <button
-              onClick={() => onNavigateTab('RUNDOWN')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+              onClick={() => onNavigateTab('TIMELINE')}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 hover:underline"
             >
-              <span>View Rundown</span>
+              <span>Kelola Timeline & Milestones</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

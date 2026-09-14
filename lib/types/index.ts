@@ -91,6 +91,18 @@ export interface Event {
   createdAt: string;
   updatedAt: string;
   tags: string[];
+  customMilestones?: ProductionMilestone[];
+}
+
+export interface ProductionMilestone {
+  id: string;
+  name: string;
+  category: 'LOAD_IN' | 'SETUP' | 'REHEARSAL' | 'SHOW_DAY' | 'STRIKE' | 'LOAD_OUT' | 'CUSTOM';
+  date: string;
+  time?: string;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'SCHEDULED' | 'DELAYED';
+  pic?: string;
+  notes?: string;
 }
 
 export type BudgetCategoryType =
@@ -538,6 +550,8 @@ export interface Milestone {
 export interface RundownItem {
   id: UUID;
   eventId: UUID;
+  dayNumber?: number; // 1, 2, 3...
+  date?: string; // YYYY-MM-DD
   time: string;
   duration: number; // in minutes
   segment: string;
@@ -691,16 +705,36 @@ export interface TaxConfiguration {
   withholding: boolean;
 }
 
+export type NotificationCategory =
+  | 'BUDGET'
+  | 'PAYMENT'
+  | 'LOGISTICS'
+  | 'RISK'
+  | 'TASK'
+  | 'PROCUREMENT'
+  | 'APPROVAL'
+  | 'SYSTEM';
+
+export interface NotificationAction {
+  type: 'NAVIGATE';
+  view?: string;
+  eventId?: UUID;
+  tab?: string;
+  label: string;
+}
+
 export interface NotificationItem {
   id: UUID;
   title: string;
   message: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL' | 'SUCCESS';
+  category: NotificationCategory;
   eventId?: UUID;
   eventName?: string;
   createdAt: string;
   read: boolean;
   link?: string;
+  action?: NotificationAction;
 }
 
 export interface AuditLogItem {

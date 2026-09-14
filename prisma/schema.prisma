@@ -1,0 +1,580 @@
+// Event Management System (EMS) - Standalone Architecture
+// Future integration target: mcaesarar2-boop/erp-logistik
+// Relational PostgreSQL Schema with foreign keys, enums, indexes, and UUIDs.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum EventStatus {
+  DRAFT
+  PROPOSAL
+  NEGOTIATION
+  CONFIRMED
+  PRE_PRODUCTION
+  PRODUCTION
+  LIVE
+  COMPLETED
+  SETTLEMENT
+  CANCELLED
+  ARCHIVED
+}
+
+enum EventPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PaymentStatus {
+  SCHEDULED
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUIRED
+}
+
+enum BudgetCategoryType {
+  ARTIST_TALENT
+  VENUE
+  PRODUCTION
+  CREATIVE
+  MARKETING
+  OPERATIONS
+  ADMINISTRATION
+  CONTINGENCY
+  CUSTOM
+}
+
+enum RequirementStatus {
+  DRAFT
+  REQUESTED
+  RESERVED
+  ALLOCATED
+  DELIVERED
+  RETURNED
+  CANCELLED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  role        String   @default("PROJECT_MANAGER")
+  department  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdEvents   Event[]       @relation("CreatedBy")
+  auditLogs       AuditLog[]
+  approvalsGiven  Approval[]    @relation("Approver")
+  approvalsAsked  Approval[]    @relation("Requester")
+}
+
+model Client {
+  id              String   @id @default(uuid())
+  company         String
+  contactPerson   String
+  email           String
+  phone           String
+  address         String
+  industry        String?
+  taxInformation  String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  events          Event[]
+}
+
+model Venue {
+  id                String   @id @default(uuid())
+  name              String
+  address           String
+  city              String
+  capacity          Int
+  type              String   // Indoor | Outdoor | Hybrid
+  contactPerson     String
+  contactPhone      String
+  rentalCost        Decimal  @default(0)
+  parkingCapacity   String?
+  loadingAreaSpecs  String?
+  powerCapacity     String?
+  restrictions      String?
+  curfewTime        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  events            Event[]
+}
+
+model Event {
+  id                    String        @id @default(uuid())
+  code                  String        @unique
+  name                  String
+  type                  String
+  description           String?
+  objective             String?
+  theme                 String?
+  
+  clientId              String
+  client                Client        @relation(fields: [clientId], references: [id])
+  
+  venueId               String
+  venue                 Venue         @relation(fields: [venueId], references: [id])
+  
+  startDate             DateTime
+  endDate               DateTime
+  loadInDate            DateTime?
+  setupDate             DateTime?
+  technicalRehearsalDate DateTime?
+  generalRehearsalDate  DateTime?
+  eventDayDate          DateTime
+  strikeDate            DateTime?
+  loadOutDate           DateTime?
+  
+  expectedAttendance    Int           @default(0)
+  actualAttendance      Int           @default(0)
+  status                EventStatus   @default(DRAFT)
+  priority              EventPriority @default(MEDIUM)
+  
+  // PICs
+  projectManager        String
+  eventPIC              String
+  financePIC            String
+  productionPIC         String
+  technicalPIC          String
+  creativePIC           String
+  salesPIC              String
+  
+  // Financial Rollups (Denormalized Cache for Speed)
+  totalBudget           Decimal       @default(0)
+  estimatedCost         Decimal       @default(0)
+  actualCost            Decimal       @default(0)
+  committedCost         Decimal       @default(0)
+  totalRevenue          Decimal       @default(0)
+  actualRevenue         Decimal       @default(0)
+  receivedRevenue       Decimal       @default(0)
+  currency              String        @default("IDR")
+  
+  createdById           String?
+  createdBy             User?         @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relationships
+  budgetItems           BudgetItem[]
+  artists               Artist[]
+  purchaseOrders        PurchaseOrder[]
+  quotations            VendorQuotation[]
+  revenues              RevenueItem[]
+  crewAssignments       CrewAssignment[]
+  tasks                 Task[]
+  rundownItems          RundownItem[]
+  risks                 RiskItem[]
+  documents             DocumentItem[]
+  approvals             Approval[]
+  payments              PaymentRecord[]
+  milestones            Milestone[]
+  requirements          EventRequirement[]
+  auditLogs             AuditLog[]
+
+  @@index([status])
+  @@index([startDate])
+  @@index([clientId])
+  @@index([venueId])
+}
+
+model BudgetItem {
+  id                String             @id @default(uuid())
+  eventId           String
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category          BudgetCategoryType
+  subcategory       String
+  description       String
+  vendorId          String?
+  vendor            Vendor?            @relation(fields: [vendorId], references: [id])
+  quantity          Decimal            @default(1)
+  unit              String             @default("lot")
+  estimatedUnitCost Decimal            @default(0)
+  estimatedTotal    Decimal            @default(0)
+  actualUnitCost    Decimal            @default(0)
+  actualTotal       Decimal            @default(0)
+  variance          Decimal            @default(0)
+  taxRate           Decimal            @default(0)
+  taxAmount         Decimal            @default(0)
+  discount          Decimal            @default(0)
+  currency          String             @default("IDR")
+  paymentStatus     PaymentStatus      @default(SCHEDULED)
+  approvalStatus    ApprovalStatus     @default(APPROVED)
+  dueDate           DateTime?
+  notes             String?
+  paidAmount        Decimal            @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([eventId])
+  @@index([category])
+  @@index([paymentStatus])
+}
+
+model Artist {
+  id                    String        @id @default(uuid())
+  eventId               String
+  event                 Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                  String
+  type                  String
+  agency                String?
+  management            String?
+  contactPerson         String?
+  phone                 String?
+  email                 String?
+  genre                 String?
+  performanceDuration   Int           @default(60) // minutes
+  setTime               String?
+  arrivalTime           String?
+  departureTime         String?
+  fee                   Decimal       @default(0)
+  tax                   Decimal       @default(0)
+  transportAllowance    Decimal       @default(0)
+  bookingStatus         String        @default("Inquiry")
+  paymentStatus         PaymentStatus @default(SCHEDULED)
+  
+  technicalRiderJson    Json?
+  hospitalityRiderJson  Json?
+  
+  contract              ArtistContract?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([eventId])
+}
+
+model ArtistContract {
+  id                  String        @id @default(uuid())
+  artistId            String        @unique
+  artist              Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  contractNumber      String        @unique
+  contractDate        DateTime
+  fee                 Decimal
+  tax                 Decimal       @default(0)
+  totalContractValue  Decimal
+  deposit             Decimal       @default(0)
+  remainingPayment    Decimal       @default(0)
+  paymentTerms        String?
+  cancellationTerms   String?
+  status              String        @default("Draft")
+  documentUrl         String?
+  milestonesJson      Json?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Vendor {
+  id                    String            @id @default(uuid())
+  name                  String
+  company               String
+  category              String
+  contactPerson         String
+  phone                 String
+  email                 String
+  address               String?
+  npwp                  String?
+  bankName              String?
+  bankAccountNumber     String?
+  bankAccountHolder     String?
+  rating                Int               @default(5)
+  notes                 String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  budgetItems           BudgetItem[]
+  purchaseOrders        PurchaseOrder[]
+  quotations            VendorQuotation[]
+}
+
+model VendorQuotation {
+  id              String         @id @default(uuid())
+  quotationNumber String         @unique
+  vendorId        String
+  vendor          Vendor         @relation(fields: [vendorId], references: [id])
+  eventId         String
+  event           Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date            DateTime
+  validUntil      DateTime
+  description     String
+  subtotal        Decimal
+  discount        Decimal        @default(0)
+  tax             Decimal        @default(0)
+  total           Decimal
+  paymentTerms    String?
+  status          String         @default("Draft")
+  itemsJson       Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([eventId])
+  @@index([vendorId])
+}
+
+model PurchaseOrder {
+  id                String         @id @default(uuid())
+  poNumber          String         @unique
+  eventId           String
+  event             Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendorId          String
+  vendor            Vendor         @relation(fields: [vendorId], references: [id])
+  date              DateTime
+  expectedDelivery  DateTime?
+  paymentTerms      String?
+  subtotal          Decimal
+  tax               Decimal        @default(0)
+  discount          Decimal        @default(0)
+  total             Decimal
+  paidAmount        Decimal        @default(0)
+  status            String         @default("Draft")
+  approvalRequired  Boolean        @default(false)
+  approvedBy        String?
+  approvedAt        DateTime?
+  itemsJson         Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([eventId])
+  @@index([vendorId])
+}
+
+model RevenueItem {
+  id                String         @id @default(uuid())
+  eventId           String
+  event             Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category          String
+  description       String
+  estimatedRevenue  Decimal        @default(0)
+  actualRevenue     Decimal        @default(0)
+  received          Decimal        @default(0)
+  outstanding       Decimal        @default(0)
+  dueDate           DateTime?
+  paymentStatus     PaymentStatus  @default(PENDING)
+  payerName         String?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([eventId])
+}
+
+model CrewAssignment {
+  id            String        @id @default(uuid())
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name          String
+  role          String
+  contact       String
+  callTime      String
+  workTime      String
+  rate          Decimal       @default(0)
+  overtime      Decimal       @default(0)
+  paymentStatus PaymentStatus @default(SCHEDULED)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([eventId])
+}
+
+model Task {
+  id          String        @id @default(uuid())
+  eventId     String
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String
+  assignee    String
+  priority    EventPriority @default(MEDIUM)
+  startDate   DateTime?
+  dueDate     DateTime?
+  status      String        @default("To Do")
+  dependency  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([status])
+}
+
+model RundownItem {
+  id            String   @id @default(uuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  time          String
+  duration      Int      @default(15) // minutes
+  segment       String
+  description   String?
+  talent        String?
+  venueArea     String?
+  pic           String?
+  technicalCue  String?
+  audioCue      String?
+  lightingCue   String?
+  videoCue      String?
+  specialEffect String?
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+model Milestone {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  date      DateTime
+  phase     String
+  completed Boolean  @default(false)
+  order     Int      @default(0)
+
+  @@index([eventId])
+}
+
+model RiskItem {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  description String
+  category    String
+  probability Int      @default(1) // 1-5
+  impact      Int      @default(1) // 1-5
+  severity    Int      @default(1) // prob * imp
+  owner       String
+  mitigation  String?
+  contingency String?
+  status      String   @default("Open")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+model DocumentItem {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  category    String
+  uploadedBy  String
+  fileSize    String
+  fileType    String
+  status      String   @default("Final")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+model Approval {
+  id          String         @id @default(uuid())
+  eventId     String
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type        String
+  requesterId String
+  requester   User           @relation("Requester", fields: [requesterId], references: [id])
+  approverId  String?
+  approver    User?          @relation("Approver", fields: [approverId], references: [id])
+  date        DateTime       @default(now())
+  amount      Decimal        @default(0)
+  reason      String
+  status      ApprovalStatus @default(PENDING)
+  comment     String?
+  entityId    String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([eventId])
+}
+
+model PaymentRecord {
+  id            String        @id @default(uuid())
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  payee         String
+  type          String
+  reference     String
+  amount        Decimal
+  dueDate       DateTime
+  paymentDate   DateTime?
+  paymentMethod String
+  status        PaymentStatus @default(SCHEDULED)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  action        String
+  entity        String
+  entityId      String
+  eventId       String?
+  event         Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  previousValue String?
+  newValue      String?
+  notes         String?
+  timestamp     DateTime @default(now())
+
+  @@index([eventId])
+  @@index([entityId])
+  @@index([timestamp])
+}
+
+// FUTURE INTEGRATION ABSTRACTION WITH ERP LOGISTICS (mcaesarar2-boop/erp-logistik)
+// This model captures event needs without storing warehouse stock, packaging, or items.
+model EventRequirement {
+  id                String            @id @default(uuid())
+  eventId           String
+  event             Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  externalSystem    String            @default("ERP_LOGISTICS")
+  externalReference String?           // e.g. Reservation ID from ERP Logistik
+  itemReference     String            // e.g. "L-Acoustics K2 Line Array", "Digico SD7"
+  category          String
+  description       String?
+  quantity          Decimal           @default(1)
+  unit              String            @default("unit")
+  requiredDate      DateTime
+  returnDate        DateTime
+  status            RequirementStatus @default(DRAFT)
+  notes             String?
+  reservedAt        DateTime?
+  deliveredAt       DateTime?
+  warehouseAssigned String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([eventId])
+  @@index([status])
+  @@index([externalReference])
+}

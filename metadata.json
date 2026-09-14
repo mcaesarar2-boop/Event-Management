@@ -1,0 +1,6 @@
+{
+  "name": "Event Management System",
+  "description": "Enterprise Event Management System for event organizers, concert promoters, and production houses, featuring end-to-end budgeting, talent and rider management, procurement, rundown cues, risk registry, and ERP logistics integration readiness.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* 
+  EMS Enterprise Custom Scrollbar & Mobile Polish
+  Harmonized with the slate-950 / slate-900 / indigo theme
+*/
+
+/* WebKit Custom Scrollbar (Chrome, Edge, Safari, Opera) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617; /* slate-950 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b; /* slate-800 */
+  border-radius: 9999px;
+  border: 1px solid rgba(15, 23, 42, 0.6);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155; /* slate-700 */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #4f46e5; /* indigo-600 */
+}
+
+::-webkit-scrollbar-corner {
+  background: #020617;
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b #020617;
+}
+
+/* Utilities for hiding scrollbars while retaining scrollability */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth touch scrolling on mobile iOS/Android */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+}

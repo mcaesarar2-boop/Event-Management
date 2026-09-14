@@ -56,6 +56,7 @@ import { MasterRisksView } from '@/components/governance/MasterRisksView';
 import { MasterDocumentsView } from '@/components/governance/MasterDocumentsView';
 import { MasterReportsView } from '@/components/governance/MasterReportsView';
 import { MasterAuditLogsView } from '@/components/governance/MasterAuditLogsView';
+import { LogisticsHubView } from '@/components/logistics/LogisticsHubView';
 
 export default function HomePage() {
   // Store Revision State to trigger reactive re-renders on mutations
@@ -673,6 +674,11 @@ export default function HomePage() {
               users={allUsers}
               currentUser={currentUser}
             />
+          )}
+
+          {/* INTEGRATION LAYER: ERP LOGISTICS HUB */}
+          {currentView === 'LOGISTICS_HUB' && !selectedEventId && (
+            <LogisticsHubView />
           )}
 
           {/* EVENT DETAIL VIEW WITH TAB WORKSPACES */}

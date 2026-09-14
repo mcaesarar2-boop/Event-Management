@@ -714,7 +714,7 @@ class EventSystemStore {
       id: generateUniqueId('sps'),
     };
     this.sponsorships.unshift(newSponsor);
-    this.logAudit('CREATE', 'Sponsorship', newSponsor.id, undefined, `Added sponsorship partner ${newSponsor.sponsorName} (${newSponsor.tier})`, newSponsor.eventId);
+    this.logAudit('CREATE', 'Sponsorship', newSponsor.id, undefined, `Added sponsorship partner ${newSponsor.sponsorName} (${newSponsor.tier})`, newSponsor.eventId || undefined);
     return newSponsor;
   }
 
@@ -727,7 +727,7 @@ class EventSystemStore {
       ...data,
     };
     this.sponsorships[idx] = updated;
-    this.logAudit('UPDATE', 'Sponsorship', id, undefined, `Updated sponsorship partner ${updated.sponsorName} (${updated.tier})`, updated.eventId);
+    this.logAudit('UPDATE', 'Sponsorship', id, undefined, `Updated sponsorship partner ${updated.sponsorName} (${updated.tier})`, updated.eventId || undefined);
     return updated;
   }
 
@@ -735,7 +735,7 @@ class EventSystemStore {
     const idx = this.sponsorships.findIndex((s) => s.id === id);
     if (idx === -1) return false;
     const deleted = this.sponsorships.splice(idx, 1)[0];
-    this.logAudit('DELETE', 'Sponsorship', id, undefined, `Removed sponsorship partner ${deleted.sponsorName}`, deleted.eventId);
+    this.logAudit('DELETE', 'Sponsorship', id, undefined, `Removed sponsorship partner ${deleted.sponsorName}`, deleted.eventId || undefined);
     return true;
   }
 
@@ -1047,7 +1047,7 @@ class EventSystemStore {
     entityId: UUID,
     previousValue?: string,
     newValue?: string,
-    eventId?: UUID | null
+    eventId?: UUID
   ) {
     const event = eventId ? this.events.find((e) => e.id === eventId) : undefined;
     const log: AuditLogItem = {
@@ -1059,7 +1059,7 @@ class EventSystemStore {
       action,
       entity,
       entityId,
-      eventId: eventId || undefined,
+      eventId,
       eventName: event?.name,
       previousValue,
       newValue,

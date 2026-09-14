@@ -456,6 +456,61 @@ export interface RevenueItem {
   notes?: string;
 }
 
+export type SponsorshipType = 'CASH' | 'IN_KIND';
+
+export type SponsorshipGroup =
+  | 'Kelompok Sponsor Utama & Tingkatan (Tiered Sponsorship)'
+  | 'Kelompok Mitra Strategis (Partnership)'
+  | 'Skema Alternatif / Eksklusif'
+  | (string & {});
+
+export type SponsorshipTier =
+  | 'Sponsor Utama (Title/Platinum Sponsor)'
+  | 'Sponsor Madya (Gold Sponsor)'
+  | 'Sponsor Pendamping (Silver Sponsor)'
+  | 'Sponsor Pendukung (Bronze Sponsor)'
+  | 'Media Partner'
+  | 'Official Venue Partner'
+  | 'Official Food & Beverage Partner'
+  | 'Logistics & Transport Partner'
+  | 'Ticketing Partner'
+  | 'Apparel/Merchandise Partner'
+  | 'Community Partner'
+  | 'Sponsor Eksklusif (Exclusive Sponsor)'
+  | (string & {});
+
+export type SponsorshipStatus =
+  | 'Proposal Sent'
+  | 'Negotiation'
+  | 'Confirmed'
+  | 'Contract Signed'
+  | 'In Progress'
+  | 'Completed'
+  | 'Declined'
+  | (string & {});
+
+export interface SponsorshipItem {
+  id: UUID;
+  eventId?: UUID | null;
+  sponsorName: string;
+  brandName?: string;
+  type: SponsorshipType;
+  group: SponsorshipGroup | string;
+  tier: SponsorshipTier;
+  contributionValue: number;
+  receivedValue?: number;
+  paymentStatus?: PaymentStatus;
+  status: SponsorshipStatus;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  deliverables?: string;
+  inKindDetails?: string;
+  contractNumber?: string;
+  contractDate?: string;
+  notes?: string;
+}
+
 export interface Client {
   id: UUID;
   company: string;
@@ -746,7 +801,7 @@ export interface AuditLogItem {
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'STATUS_CHANGE';
   entity: string;
   entityId: UUID;
-  eventId?: UUID;
+  eventId?: UUID | null;
   eventName?: string;
   previousValue?: string;
   newValue?: string;

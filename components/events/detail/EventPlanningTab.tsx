@@ -267,11 +267,11 @@ export function EventPlanningTab({
                 </div>
 
                 <div className="p-2 space-y-2.5 min-h-[300px] max-h-[650px] overflow-y-auto">
-                  {colTasks.map((t) => {
+                  {colTasks.map((t, idx) => {
                     const isOverdue = t.status !== 'Completed' && t.dueDate < now;
                     return (
                       <div
-                        key={t.id}
+                        key={`${t.id || 'task'}-${idx}`}
                         className="bg-slate-950/80 border border-slate-800/90 rounded-lg p-3 space-y-2 hover:border-slate-700 transition"
                       >
                         <div className="flex items-start justify-between gap-1">
@@ -352,12 +352,12 @@ export function EventPlanningTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {tasks.map((t) => {
+              {tasks.map((t, idx) => {
                 const isCompleted = t.status === 'Completed';
 
                 return (
                   <tr
-                    key={t.id}
+                    key={`${t.id || 'task'}-${idx}`}
                     className={`hover:bg-slate-800/40 transition group ${
                       isCompleted ? 'bg-slate-950/30 text-slate-500' : ''
                     }`}

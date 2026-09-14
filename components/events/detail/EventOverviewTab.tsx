@@ -16,8 +16,13 @@ import {
   ShieldCheck,
   Building2,
   FileCheck,
+  Handshake,
+  Gift,
+  Award,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react';
-import { Event, HealthStatus } from '@/lib/types';
+import { Event, HealthStatus, SponsorshipItem } from '@/lib/types';
 import { formatIDR, formatCompactIDR, formatDate } from '@/lib/utils/format';
 import { EventTabType } from './EventDetailHeader';
 
@@ -40,6 +45,7 @@ interface EventOverviewTabProps {
     clientReceivable: number;
     vendorPayable: number;
   };
+  sponsorships?: SponsorshipItem[];
   onNavigateTab: (tab: EventTabType) => void;
 }
 
@@ -47,6 +53,7 @@ export function EventOverviewTab({
   event,
   health,
   financials,
+  sponsorships = [],
   onNavigateTab,
 }: EventOverviewTabProps) {
   const isOverBudget = financials.actualCost > financials.totalBudget;
@@ -267,6 +274,117 @@ export function EventOverviewTab({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* SPONSORSHIP & STRATEGIC PARTNERS OVERVIEW GRID */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+              <Handshake className="w-4 h-4" />
+              <span>SPONSORSHIP & COMMERCIAL PARTNERS OVERVIEW</span>
+            </div>
+            <h2 className="text-base font-bold text-white mt-0.5">
+              Portofolio Dukungan Sponsor & Kemitraan Strategis
+            </h2>
+            <p className="text-xs text-slate-400">
+              Rekapitulasi sokongan dana tunai (Tiered Cash) dan fasilitas barter (In-Kind) untuk event ini.
+            </p>
+          </div>
+
+          <button
+            onClick={() => onNavigateTab('SPONSORSHIP')}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition text-xs font-semibold shrink-0"
+          >
+            <span>Kelola Sponsorship & Tambah Mitra</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Highlight Summary Mini Metrics */}
+        {(() => {
+          const list = sponsorships || [];
+          const cashList = list.filter((s) => s.type === 'CASH');
+          const inKindList = list.filter((s) => s.type === 'IN_KIND');
+          const totalCash = cashList.reduce((sum, s) => sum + (s.contributionValue || 0), 0);
+          const totalInKind = inKindList.reduce((sum, s) => sum + (s.contributionValue || 0), 0);
+
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                  <div className="text-[11px] text-slate-400 font-medium uppercase">Dana Tunai Masuk (Cash)</div>
+                  <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">
+                    {formatIDR(totalCash)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {cashList.length} Entitas Sponsor Berjenjang
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                  <div className="text-[11px] text-slate-400 font-medium uppercase">Efisiensi Barter (In-Kind)</div>
+                  <div className="text-lg font-bold text-sky-400 font-mono mt-0.5">
+                    {formatIDR(totalInKind)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {inKindList.length} Mitra Strategis Fasilitas / Media
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                  <div className="text-[11px] text-slate-400 font-medium uppercase">Total Nilai Kemitraan</div>
+                  <div className="text-lg font-bold text-white font-mono mt-0.5">
+                    {formatIDR(totalCash + totalInKind)}
+                  </div>
+                  <div className="text-[10px] text-indigo-400 mt-0.5">
+                    Akumulasi Kontribusi Event
+                  </div>
+                </div>
+              </div>
+
+              {/* Sponsor Grid Items Preview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                {list.slice(0, 6).map((sp, idx) => (
+                  <div
+                    key={`${sp.id || 'sp'}-${idx}`}
+                    onClick={() => onNavigateTab('SPONSORSHIP')}
+                    className="p-3 bg-slate-950/50 hover:bg-slate-800/50 border border-slate-800 rounded-xl cursor-pointer transition flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-1.5">
+                        <span className="font-bold text-xs text-white group-hover:text-indigo-300 transition truncate">
+                          {sp.brandName || sp.sponsorName}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase shrink-0 ${
+                            sp.type === 'CASH'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
+                          }`}
+                        >
+                          {sp.type === 'CASH' ? 'Cash' : 'In-Kind'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-amber-300/90 font-medium truncate mt-0.5">
+                        {sp.tier}
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
+                      <span className="font-mono font-bold text-slate-200">
+                        {formatIDR(sp.contributionValue)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 group-hover:text-white transition flex items-center gap-0.5">
+                        Detail <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Quick Action Navigation Buttons */}

@@ -22,6 +22,7 @@ import {
   NotificationItem,
   HealthStatus,
   UUID,
+  SponsorshipItem,
 } from '@/lib/types';
 import {
   SEED_USERS,
@@ -44,7 +45,14 @@ import {
   SEED_AUDIT_LOGS,
   SEED_REQUIREMENTS,
   SEED_NOTIFICATIONS,
+  SEED_SPONSORSHIPS,
 } from './seed';
+
+let idCounter = 0;
+export function generateUniqueId(prefix: string): string {
+  idCounter += 1;
+  return `${prefix}-${Date.now()}-${idCounter}-${Math.random().toString(36).substring(2, 7)}`;
+}
 
 // Singleton in-memory relational state
 class EventSystemStore {
@@ -69,6 +77,7 @@ class EventSystemStore {
   private auditLogs: AuditLogItem[] = SEED_AUDIT_LOGS.filter((a) => !a.eventId || SEED_EVENTS.some((e) => e.id === a.eventId));
   private requirements: EventRequirement[] = SEED_REQUIREMENTS.filter((r) => !r.eventId || SEED_EVENTS.some((e) => e.id === r.eventId));
   private notifications: NotificationItem[] = [...SEED_NOTIFICATIONS];
+  private sponsorships: SponsorshipItem[] = [...SEED_SPONSORSHIPS];
   private currentUser: UserAccount = SEED_USERS[0]; // Bima Satria Wardhana (Super Admin)
 
   // Current User / RBAC
@@ -113,7 +122,7 @@ class EventSystemStore {
   createNotification(item: Omit<NotificationItem, 'id' | 'createdAt'> & { createdAt?: string }): NotificationItem {
     const newNotif: NotificationItem = {
       ...item,
-      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateUniqueId('notif'),
       createdAt: item.createdAt || 'Baru saja',
     };
     this.notifications.unshift(newNotif);
@@ -139,7 +148,7 @@ class EventSystemStore {
     }
   ): Client {
     const newClient: Client = {
-      id: `cli-${Date.now()}`,
+      id: generateUniqueId('cli'),
       company: client.company,
       contactPerson: client.contactPerson,
       email: client.email || '',
@@ -198,11 +207,32 @@ class EventSystemStore {
   createVenue(venue: Omit<Venue, 'id'>): Venue {
     const newVenue: Venue = {
       ...venue,
-      id: `ven-${Date.now()}`,
+      id: generateUniqueId('ven'),
     };
     this.venues.unshift(newVenue);
     this.logAudit('CREATE', 'Venue', newVenue.id, undefined, `Created venue ${newVenue.name}`);
     return newVenue;
+  }
+
+  updateVenue(id: UUID, data: Partial<Venue>): Venue | undefined {
+    const idx = this.venues.findIndex((v) => v.id === id);
+    if (idx === -1) return undefined;
+    const prev = this.venues[idx];
+    const updated: Venue = {
+      ...prev,
+      ...data,
+    };
+    this.venues[idx] = updated;
+    this.logAudit('UPDATE', 'Venue', id, undefined, `Updated venue ${updated.name}`);
+    return updated;
+  }
+
+  deleteVenue(id: UUID): boolean {
+    const idx = this.venues.findIndex((v) => v.id === id);
+    if (idx === -1) return false;
+    const deleted = this.venues.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'Venue', id, undefined, `Deleted venue ${deleted.name}`);
+    return true;
   }
 
   // Templates
@@ -221,7 +251,7 @@ class EventSystemStore {
   }
 
   createEvent(data: Partial<Event> & { templateId?: UUID }): Event {
-    const id = `evt-${Date.now()}`;
+    const id = generateUniqueId('evt');
     const code = `EVT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
     const venue = this.venues.find((v) => v.id === data.venueId) || this.venues[0];
     const client = this.clients.find((c) => c.id === data.clientId) || this.clients[0];
@@ -501,7 +531,7 @@ class EventSystemStore {
 
     const newItem: BudgetItem = {
       ...item,
-      id: `bdg-${Date.now()}`,
+      id: generateUniqueId('bdg'),
       estimatedTotal: estTotal,
       actualTotal: actTotal,
       variance,
@@ -557,7 +587,7 @@ class EventSystemStore {
   createArtist(artist: Omit<Artist, 'id'>): Artist {
     const newArtist: Artist = {
       ...artist,
-      id: `art-${Date.now()}`,
+      id: generateUniqueId('art'),
     };
     this.artists.unshift(newArtist);
     this.logAudit('CREATE', 'Artist', newArtist.id, undefined, `Added artist ${newArtist.name}`, newArtist.eventId);
@@ -593,12 +623,33 @@ class EventSystemStore {
   createVendor(vendor: Omit<Vendor, 'id' | 'activeEventsCount'>): Vendor {
     const newVendor: Vendor = {
       ...vendor,
-      id: `vnd-${Date.now()}`,
+      id: generateUniqueId('vnd'),
       activeEventsCount: 0,
     };
     this.vendors.unshift(newVendor);
     this.logAudit('CREATE', 'Vendor', newVendor.id, undefined, `Created vendor ${newVendor.company}`);
     return newVendor;
+  }
+
+  updateVendor(id: UUID, data: Partial<Vendor>): Vendor | undefined {
+    const idx = this.vendors.findIndex((v) => v.id === id);
+    if (idx === -1) return undefined;
+    const prev = this.vendors[idx];
+    const updated: Vendor = {
+      ...prev,
+      ...data,
+    };
+    this.vendors[idx] = updated;
+    this.logAudit('UPDATE', 'Vendor', id, undefined, `Updated vendor ${updated.company}`);
+    return updated;
+  }
+
+  deleteVendor(id: UUID): boolean {
+    const idx = this.vendors.findIndex((v) => v.id === id);
+    if (idx === -1) return false;
+    const deleted = this.vendors.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'Vendor', id, undefined, `Deleted vendor ${deleted.company}`);
+    return true;
   }
 
   // Purchase Orders & Procurement
@@ -612,7 +663,7 @@ class EventSystemStore {
     const poNumber = `PO-${new Date().getFullYear()}-${String(count).padStart(3, '0')}`;
     const newPO: PurchaseOrder = {
       ...po,
-      id: `po-${Date.now()}`,
+      id: generateUniqueId('po'),
       poNumber,
     };
     this.purchaseOrders.unshift(newPO);
@@ -639,12 +690,53 @@ class EventSystemStore {
     const outstanding = (rev.actualRevenue || 0) - (rev.received || 0);
     const newRev: RevenueItem = {
       ...rev,
-      id: `rev-${Date.now()}`,
+      id: generateUniqueId('rev'),
       outstanding: outstanding > 0 ? outstanding : 0,
     };
     this.revenues.unshift(newRev);
     this.logAudit('CREATE', 'RevenueItem', newRev.id, undefined, `Created revenue line ${newRev.description}`, newRev.eventId);
     return newRev;
+  }
+
+  // Sponsorships & Strategic Partners
+  getSponsorships(eventId?: UUID): SponsorshipItem[] {
+    if (!eventId) return [...this.sponsorships];
+    return this.sponsorships.filter((s) => s.eventId === eventId);
+  }
+
+  getSponsorshipById(id: UUID): SponsorshipItem | undefined {
+    return this.sponsorships.find((s) => s.id === id);
+  }
+
+  createSponsorship(item: Omit<SponsorshipItem, 'id'>): SponsorshipItem {
+    const newSponsor: SponsorshipItem = {
+      ...item,
+      id: generateUniqueId('sps'),
+    };
+    this.sponsorships.unshift(newSponsor);
+    this.logAudit('CREATE', 'Sponsorship', newSponsor.id, undefined, `Added sponsorship partner ${newSponsor.sponsorName} (${newSponsor.tier})`, newSponsor.eventId);
+    return newSponsor;
+  }
+
+  updateSponsorship(id: UUID, data: Partial<SponsorshipItem>): SponsorshipItem | undefined {
+    const idx = this.sponsorships.findIndex((s) => s.id === id);
+    if (idx === -1) return undefined;
+    const prev = this.sponsorships[idx];
+    const updated: SponsorshipItem = {
+      ...prev,
+      ...data,
+    };
+    this.sponsorships[idx] = updated;
+    this.logAudit('UPDATE', 'Sponsorship', id, undefined, `Updated sponsorship partner ${updated.sponsorName} (${updated.tier})`, updated.eventId);
+    return updated;
+  }
+
+  deleteSponsorship(id: UUID): boolean {
+    const idx = this.sponsorships.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+    const deleted = this.sponsorships.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'Sponsorship', id, undefined, `Removed sponsorship partner ${deleted.sponsorName}`, deleted.eventId);
+    return true;
   }
 
   // Crew
@@ -656,23 +748,51 @@ class EventSystemStore {
   createCrew(crewMember: Omit<CrewAssignment, 'id'>): CrewAssignment {
     const newMember: CrewAssignment = {
       ...crewMember,
-      id: `crw-${Date.now()}`,
+      id: generateUniqueId('crw'),
     };
     this.crew.unshift(newMember);
     this.logAudit('CREATE', 'CrewAssignment', newMember.id, undefined, `Assigned crew ${newMember.name} (${newMember.role})`, newMember.eventId);
     return newMember;
   }
 
+  updateCrew(id: UUID, data: Partial<CrewAssignment>): CrewAssignment | undefined {
+    const idx = this.crew.findIndex((c) => c.id === id);
+    if (idx === -1) return undefined;
+    const prev = this.crew[idx];
+    const updated: CrewAssignment = {
+      ...prev,
+      ...data,
+    };
+    this.crew[idx] = updated;
+    this.logAudit('UPDATE', 'CrewAssignment', id, undefined, `Updated crew ${updated.name} (${updated.role})`, updated.eventId);
+    return updated;
+  }
+
+  deleteCrew(id: UUID): boolean {
+    const idx = this.crew.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    const deleted = this.crew.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'CrewAssignment', id, undefined, `Removed crew ${deleted.name}`, deleted.eventId);
+    return true;
+  }
+
   // Tasks
   getTasks(eventId?: UUID): Task[] {
-    if (!eventId) return [...this.tasks];
-    return this.tasks.filter((t) => t.eventId === eventId);
+    const raw = !eventId ? [...this.tasks] : this.tasks.filter((t) => t.eventId === eventId);
+    const seen = new Set<string>();
+    return raw.map((t, idx) => {
+      if (seen.has(t.id)) {
+        t.id = `${t.id}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+      }
+      seen.add(t.id);
+      return t;
+    });
   }
 
   createTask(task: Omit<Task, 'id'>): Task {
     const newTask: Task = {
       ...task,
-      id: `tsk-${Date.now()}`,
+      id: generateUniqueId('tsk'),
     };
     this.tasks.unshift(newTask);
     this.logAudit('CREATE', 'Task', newTask.id, undefined, `Created task ${newTask.name}`, newTask.eventId);
@@ -801,7 +921,7 @@ class EventSystemStore {
     const order = eventRundowns.length + 1;
     const newItem: RundownItem = {
       ...item,
-      id: `rnd-${Date.now()}`,
+      id: generateUniqueId('rnd'),
       order,
     };
     this.rundown.push(newItem);
@@ -846,7 +966,7 @@ class EventSystemStore {
     const severity = (risk.probability || 1) * (risk.impact || 1);
     const newRisk: RiskItem = {
       ...risk,
-      id: `rsk-${Date.now()}`,
+      id: generateUniqueId('rsk'),
       severity,
     };
     this.risks.unshift(newRisk);
@@ -863,7 +983,7 @@ class EventSystemStore {
   createApproval(app: Omit<ApprovalRequest, 'id' | 'date' | 'status'>): ApprovalRequest {
     const newApp: ApprovalRequest = {
       ...app,
-      id: `app-${Date.now()}`,
+      id: generateUniqueId('app'),
       date: new Date().toISOString(),
       status: 'PENDING',
     };
@@ -891,7 +1011,7 @@ class EventSystemStore {
   recordPayment(payment: Omit<PaymentRecord, 'id'>): PaymentRecord {
     const newPayment: PaymentRecord = {
       ...payment,
-      id: `pay-${Date.now()}`,
+      id: generateUniqueId('pay'),
     };
     this.payments.unshift(newPayment);
     this.logAudit('CREATE', 'PaymentRecord', newPayment.id, undefined, `Recorded payment Rp ${newPayment.amount.toLocaleString('id-ID')} to ${newPayment.payee}`, newPayment.eventId);
@@ -907,7 +1027,7 @@ class EventSystemStore {
   addDocument(doc: Omit<DocumentItem, 'id' | 'uploadedAt'>): DocumentItem {
     const newDoc: DocumentItem = {
       ...doc,
-      id: `doc-${Date.now()}`,
+      id: generateUniqueId('doc'),
       uploadedAt: new Date().toISOString(),
     };
     this.documents.unshift(newDoc);
@@ -927,11 +1047,11 @@ class EventSystemStore {
     entityId: UUID,
     previousValue?: string,
     newValue?: string,
-    eventId?: UUID
+    eventId?: UUID | null
   ) {
     const event = eventId ? this.events.find((e) => e.id === eventId) : undefined;
     const log: AuditLogItem = {
-      id: `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateUniqueId('aud'),
       userId: this.currentUser.id,
       userName: this.currentUser.name,
       userRole: this.currentUser.role,
@@ -939,7 +1059,7 @@ class EventSystemStore {
       action,
       entity,
       entityId,
-      eventId,
+      eventId: eventId || undefined,
       eventName: event?.name,
       previousValue,
       newValue,
@@ -956,7 +1076,7 @@ class EventSystemStore {
   createRequirement(req: Omit<EventRequirement, 'id' | 'externalSystem'>): EventRequirement {
     const newReq: EventRequirement = {
       ...req,
-      id: `req-${Date.now()}`,
+      id: generateUniqueId('req'),
       externalSystem: 'ERP_LOGISTICS',
     };
     this.requirements.unshift(newReq);

@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ShieldCheck,
   X,
+  Handshake,
 } from 'lucide-react';
 
 export type NavigationItem =
@@ -31,8 +32,9 @@ export type NavigationItem =
   | 'TASKS'
   | 'RUNDOWN'
   | 'FINANCE'
-  | 'ARTISTS'
   | 'VENDORS'
+  | 'SPONSORSHIP'
+  | 'ARTISTS'
   | 'CREW'
   | 'CLIENTS'
   | 'VENUES'
@@ -134,6 +136,12 @@ export function Sidebar({
           id: 'VENDORS' as NavigationItem,
           label: 'Vendors & POs',
           icon: ShoppingBag,
+          badge: null,
+        },
+        {
+          id: 'SPONSORSHIP' as NavigationItem,
+          label: 'Sponsorship & Partners',
+          icon: Handshake,
           badge: null,
         },
       ],

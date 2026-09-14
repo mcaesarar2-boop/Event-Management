@@ -46,6 +46,7 @@ import { MasterCalendar } from '@/components/planning/MasterCalendar';
 import { MilestoneGantt } from '@/components/planning/MilestoneGantt';
 import { TaskChecklist } from '@/components/planning/TaskChecklist';
 import { MasterFinanceView } from '@/components/finance/MasterFinanceView';
+import { MasterSponsorshipView } from '@/components/finance/MasterSponsorshipView';
 import { MasterVendorsView } from '@/components/stakeholders/MasterVendorsView';
 import { MasterArtistsView } from '@/components/stakeholders/MasterArtistsView';
 import { MasterCrewView } from '@/components/stakeholders/MasterCrewView';
@@ -511,6 +512,34 @@ export default function HomePage() {
                 db.createVendor(v);
                 setRevision((r) => r + 1);
               }}
+              onUpdateVendor={(id, v) => {
+                db.updateVendor(id, v);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteVendor={(id) => {
+                db.deleteVendor(id);
+                setRevision((r) => r + 1);
+              }}
+            />
+          )}
+
+          {currentView === 'SPONSORSHIP' && !selectedEventId && (
+            <MasterSponsorshipView
+              sponsorships={db.getSponsorships()}
+              events={events}
+              onSelectEvent={handleSelectEvent}
+              onCreateSponsorship={(s) => {
+                db.createSponsorship(s);
+                setRevision((r) => r + 1);
+              }}
+              onUpdateSponsorship={(id, s) => {
+                db.updateSponsorship(id, s);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteSponsorship={(id) => {
+                db.deleteSponsorship(id);
+                setRevision((r) => r + 1);
+              }}
             />
           )}
 
@@ -524,6 +553,14 @@ export default function HomePage() {
                 db.createArtist(a);
                 setRevision((r) => r + 1);
               }}
+              onUpdateArtist={(id, a) => {
+                db.updateArtist(id, a);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteArtist={(id) => {
+                db.deleteArtist(id);
+                setRevision((r) => r + 1);
+              }}
             />
           )}
 
@@ -534,6 +571,14 @@ export default function HomePage() {
               onSelectEvent={handleSelectEvent}
               onCreateCrew={(c) => {
                 db.createCrew(c);
+                setRevision((r) => r + 1);
+              }}
+              onUpdateCrew={(id, c) => {
+                db.updateCrew(id, c);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteCrew={(id) => {
+                db.deleteCrew(id);
                 setRevision((r) => r + 1);
               }}
             />
@@ -566,6 +611,14 @@ export default function HomePage() {
               onSelectEvent={handleSelectEvent}
               onCreateVenue={(v) => {
                 db.createVenue(v);
+                setRevision((r) => r + 1);
+              }}
+              onUpdateVenue={(id, v) => {
+                db.updateVenue(id, v);
+                setRevision((r) => r + 1);
+              }}
+              onDeleteVenue={(id) => {
+                db.deleteVenue(id);
                 setRevision((r) => r + 1);
               }}
             />
@@ -641,6 +694,7 @@ export default function HomePage() {
                   event={selectedEvent}
                   health={eventHealth}
                   financials={db.calculateFinancialSummary(selectedEvent)}
+                  sponsorships={db.getSponsorships(selectedEvent.id)}
                   onNavigateTab={setActiveTab}
                 />
               )}
@@ -696,6 +750,28 @@ export default function HomePage() {
                   event={selectedEvent}
                   revenues={revenues}
                   onCreateRevenue={handleCreateRevenue}
+                />
+              )}
+
+              {/* Tab: Sponsorship & Strategic Partners */}
+              {activeTab === 'SPONSORSHIP' && (
+                <MasterSponsorshipView
+                  sponsorships={db.getSponsorships(selectedEvent.id)}
+                  events={[selectedEvent]}
+                  selectedEventFilterId={selectedEvent.id}
+                  onSelectEvent={handleSelectEvent}
+                  onCreateSponsorship={(s) => {
+                    db.createSponsorship({ ...s, eventId: selectedEvent.id });
+                    setRevision((r) => r + 1);
+                  }}
+                  onUpdateSponsorship={(id, s) => {
+                    db.updateSponsorship(id, s);
+                    setRevision((r) => r + 1);
+                  }}
+                  onDeleteSponsorship={(id) => {
+                    db.deleteSponsorship(id);
+                    setRevision((r) => r + 1);
+                  }}
                 />
               )}
 

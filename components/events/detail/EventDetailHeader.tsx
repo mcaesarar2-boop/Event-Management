@@ -25,6 +25,7 @@ export type EventTabType =
   | 'TALENT'
   | 'PROCUREMENT'
   | 'REVENUE'
+  | 'SPONSORSHIP'
   | 'PLANNING'
   | 'RUNDOWN'
   | 'CREW'
@@ -121,6 +122,7 @@ export function EventDetailHeader({
     { id: 'TALENT', label: 'Talent & Riders' },
     { id: 'PROCUREMENT', label: 'Vendors & POs' },
     { id: 'REVENUE', label: 'Revenue' },
+    { id: 'SPONSORSHIP', label: 'Sponsorship' },
     { id: 'PLANNING', label: 'Tasks & Checklist' },
     { id: 'RUNDOWN', label: 'Master Rundown' },
     { id: 'CREW', label: 'Crew Roster' },

@@ -36,8 +36,11 @@ import {
   EventStatus,
   UserAccount,
   ProductionMilestone,
+  MilestoneTag,
 } from '@/lib/types';
 import { formatRupiah } from '@/lib/utils/format';
+import { ProductionTimelineTable } from './timeline/ProductionTimelineTable';
+import { DEFAULT_MILESTONE_TAGS, generateStandardMilestones } from '@/lib/utils/timelineColors';
 
 interface EventCreateModalProps {
   isOpen: boolean;
@@ -94,6 +97,12 @@ export function EventCreateModal({
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [showStartDate, setShowStartDate] = useState('2026-08-15');
   const [showEndDate, setShowEndDate] = useState('2026-08-16');
+
+  // Dynamic Production Timeline & Custom Tags
+  const [milestones, setMilestones] = useState<ProductionMilestone[]>(() =>
+    generateStandardMilestones('2026-08-15')
+  );
+  const [timelineTags, setTimelineTags] = useState<MilestoneTag[]>(DEFAULT_MILESTONE_TAGS);
 
   // 7 Critical Timeline Phases (Production Schedule)
   const [loadInDate, setLoadInDate] = useState('2026-08-11');
@@ -225,9 +234,24 @@ export function EventCreateModal({
       return;
     }
 
-    const startDateTime = `${loadInDate}T${loadInTime}:00Z`;
-    const endDateTime = `${loadOutDate}T${loadOutTime}:00Z`;
-    const eventDayDateTime = `${showDayDate}T${showGateTime}:00Z`;
+    // Calculate min and max dates from milestones
+    const sortedDates = milestones.map((m) => m.date).filter(Boolean).sort();
+    const minDate = sortedDates[0] || showStartDate || new Date().toISOString().split('T')[0];
+    const maxDate = sortedDates[sortedDates.length - 1] || showEndDate || minDate;
+
+    const startDateTime = `${minDate}T08:00:00Z`;
+    const endDateTime = `${maxDate}T23:59:00Z`;
+
+    // Map backwards-compatible phase dates
+    const showDayItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('show') || m.category === 'SHOW_DAY');
+    const loadInItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('load-in') || m.category === 'LOAD_IN') || milestones[0];
+    const setupItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('setup') || m.category === 'SETUP') || milestones[1];
+    const techRehItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('tech') || (m.category === 'REHEARSAL' && m.title?.toLowerCase().includes('tech')));
+    const genRehItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('gr') || m.tagLabel?.toLowerCase().includes('general') || (m.category === 'REHEARSAL' && !m.title?.toLowerCase().includes('tech')));
+    const strikeItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('strike') || m.category === 'STRIKE') || milestones[milestones.length - 2];
+    const loadOutItem = milestones.find((m) => m.tagLabel?.toLowerCase().includes('load-out') || m.category === 'LOAD_OUT') || milestones[milestones.length - 1] || strikeItem;
+
+    const eventDayDateTime = showDayItem ? `${showDayItem.date}T${showDayItem.time || '14:00'}:00Z` : `${minDate}T14:00:00Z`;
 
     onCreateEvent({
       name,
@@ -242,13 +266,15 @@ export function EventCreateModal({
       templateId: templateId || undefined,
       startDate: startDateTime,
       endDate: endDateTime,
-      loadInDate: `${loadInDate}T${loadInTime}:00Z`,
-      setupDate: `${setupDate}T${setupTime}:00Z`,
-      technicalRehearsalDate: `${techRehearsalDate}T${techRehearsalTime}:00Z`,
-      generalRehearsalDate: `${genRehearsalDate}T${genRehearsalTime}:00Z`,
+      loadInDate: loadInItem ? `${loadInItem.date}T${loadInItem.time || '08:00'}:00Z` : `${minDate}T08:00:00Z`,
+      setupDate: setupItem ? `${setupItem.date}T${setupItem.time || '09:00'}:00Z` : `${minDate}T09:00:00Z`,
+      technicalRehearsalDate: techRehItem ? `${techRehItem.date}T${techRehItem.time || '14:00'}:00Z` : `${minDate}T14:00:00Z`,
+      generalRehearsalDate: genRehItem ? `${genRehItem.date}T${genRehItem.time || '19:00'}:00Z` : `${minDate}T19:00:00Z`,
       eventDayDate: eventDayDateTime,
-      strikeDate: `${strikeDate}T${strikeTime}:00Z`,
-      loadOutDate: `${loadOutDate}T${loadOutTime}:00Z`,
+      strikeDate: strikeItem ? `${strikeItem.date}T${strikeItem.time || '00:00'}:00Z` : `${maxDate}T00:00:00Z`,
+      loadOutDate: loadOutItem ? `${loadOutItem.date}T${loadOutItem.time || '18:00'}:00Z` : `${maxDate}T18:00:00Z`,
+      milestones,
+      customMilestones: milestones,
       expectedAttendance: Number(attendance),
       totalBudget: Number(budget),
       totalRevenue: Number(revenue),
@@ -600,339 +626,20 @@ export function EventCreateModal({
             </div>
           )}
 
-          {/* TAB 2: PRODUCTION TIMELINE (7 PHASES) */}
+          {/* TAB 2: PRODUCTION TIMELINE (INTERACTIVE TABLE) */}
           {activeTab === 'TIMELINE' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Show Day Header & Auto-Calculate Trigger */}
-              <div className="bg-gradient-to-r from-indigo-950/50 via-slate-900 to-indigo-950/30 border border-indigo-900/50 rounded-xl p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-indigo-400" />
-                      Penjadwalan 7 Tahapan Kritis Produksi (Critical Path)
-                    </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Pilih tanggal Hari-H (Show Day), sistem akan mengkalkulasi otomatis estimasi tanggal Load-In (D-4), Setup (D-3), GR (D-1), hingga Bongkaran (D+1).
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAutoCalculateDates(showStartDate)}
-                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 shrink-0"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>⚡ Auto-Kalkulasi D-Day</span>
-                  </button>
-                </div>
-
-                {/* Show Day Inputs */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-indigo-900/30">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-300">
-                      Hari-H (Show Day Utama) *
-                    </label>
-                    <input
-                      type="date"
-                      value={showStartDate}
-                      onChange={(e) => handleShowDateChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-semibold text-slate-300">
-                        Durasi Penyelenggaraan
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = !isMultiDay;
-                          setIsMultiDay(next);
-                          if (!next) setShowEndDate(showStartDate);
-                        }}
-                        className="text-[10px] text-indigo-400 hover:underline"
-                      >
-                        {isMultiDay ? 'Jadikan 1 Hari Saja' : '+ Multi-day (Beberapa Hari)'}
-                      </button>
-                    </div>
-                    {isMultiDay ? (
-                      <input
-                        type="date"
-                        value={showEndDate}
-                        onChange={(e) => setShowEndDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                      />
-                    ) : (
-                      <div className="w-full bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-1.5 text-xs text-slate-400">
-                        Single Day (1 Hari Saja)
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-300">
-                      Jam Open Gate & Curfew
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="time"
-                        value={showGateTime}
-                        onChange={(e) => setShowGateTime(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                      />
-                      <input
-                        type="time"
-                        value={showCurfewTime}
-                        onChange={(e) => setShowCurfewTime(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Visual Phase Pipeline Mini-Bar */}
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl overflow-x-auto">
-                <div className="flex items-center justify-between min-w-[580px] text-[10px] font-semibold text-slate-400">
-                  <div className="flex items-center gap-1 text-sky-400">
-                    <Truck className="w-3.5 h-3.5" />
-                    <span>1. Load-In (D-4)</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-cyan-400">
-                    <Wrench className="w-3.5 h-3.5" />
-                    <span>2. Setup (D-3)</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-amber-400">
-                    <Music className="w-3.5 h-3.5" />
-                    <span>3. Tech Dry Run (D-2)</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-violet-400">
-                    <Tv className="w-3.5 h-3.5" />
-                    <span>4. GR (D-1)</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>5. SHOW DAY</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-rose-400">
-                    <span>6. Strike (D+1)</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <div className="flex items-center gap-1 text-slate-300">
-                    <span>7. Load-Out (D+2)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 7 Detailed Phase Input Cards */}
-              <div className="space-y-2.5">
-                {/* 1. Load In */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-sky-950 text-sky-400 flex items-center justify-center font-bold text-xs border border-sky-800 shrink-0">
-                      1
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">Load-In Logistik & Rigging Truss</div>
-                      <div className="text-[10px] text-slate-400">Loading dock, genset PLN, konstruksi panggung</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={loadInDate}
-                      onChange={(e) => setLoadInDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={loadInTime}
-                      onChange={(e) => setLoadInTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 2. Setup */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-cyan-950 text-cyan-400 flex items-center justify-center font-bold text-xs border border-cyan-800 shrink-0">
-                      2
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">Audio, Lighting & LED Setup</div>
-                      <div className="text-[10px] text-slate-400">FOH sound console, flying speaker, videotron LED</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={setupDate}
-                      onChange={(e) => setSetupDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={setupTime}
-                      onChange={(e) => setSetupTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Tech Rehearsal */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-amber-950 text-amber-400 flex items-center justify-center font-bold text-xs border border-amber-800 shrink-0">
-                      3
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">Technical Rehearsal & Soundcheck</div>
-                      <div className="text-[10px] text-slate-400">Tuning delay tower, lighting cue, mic check</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={techRehearsalDate}
-                      onChange={(e) => setTechRehearsalDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={techRehearsalTime}
-                      onChange={(e) => setTechRehearsalTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 4. General Rehearsal */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-violet-950 text-violet-400 flex items-center justify-center font-bold text-xs border border-violet-800 shrink-0">
-                      4
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">General Rehearsal (GR / Geladi Bersih)</div>
-                      <div className="text-[10px] text-slate-400">Dry run rundown penuh MC, talent, dan stage manager</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={genRehearsalDate}
-                      onChange={(e) => setGenRehearsalDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={genRehearsalTime}
-                      onChange={(e) => setGenRehearsalTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 5. Show Day */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-emerald-950/30 p-3 rounded-xl border border-emerald-900/60 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-900 text-emerald-300 flex items-center justify-center font-bold text-xs border border-emerald-700 shrink-0">
-                      5
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-emerald-300">SHOW DAY (Hari-H Acara Live)</div>
-                      <div className="text-[10px] text-emerald-400/80">Open gate, live performance, crowd control</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={showDayDate}
-                      onChange={(e) => setShowDayDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-emerald-800/80 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-200 focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3 text-[11px] text-emerald-300 font-mono flex items-center gap-1">
-                    <span>Gate: {showGateTime}</span>
-                    <span>-</span>
-                    <span>Curfew: {showCurfewTime}</span>
-                  </div>
-                </div>
-
-                {/* 6. Strike */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-rose-950 text-rose-400 flex items-center justify-center font-bold text-xs border border-rose-800 shrink-0">
-                      6
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">Strike & Stage Dismantling (Bongkaran)</div>
-                      <div className="text-[10px] text-slate-400">Penurunan rigging, bongkar sound, flight case</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={strikeDate}
-                      onChange={(e) => setStrikeDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={strikeTime}
-                      onChange={(e) => setStrikeTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 7. Load Out */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800 items-center">
-                  <div className="md:col-span-5 flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs border border-slate-700 shrink-0">
-                      7
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200">Load-Out & Serah Terima Venue</div>
-                      <div className="text-[10px] text-slate-400">Pengangkutan kontainer keluar & inspeksi venue</div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-4">
-                    <input
-                      type="date"
-                      value={loadOutDate}
-                      onChange={(e) => setLoadOutDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <input
-                      type="time"
-                      value={loadOutTime}
-                      onChange={(e) => setLoadOutTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              </div>
+              <ProductionTimelineTable
+                milestones={milestones}
+                onChangeMilestones={setMilestones}
+                referenceShowDay={showStartDate}
+                onReferenceShowDayChange={(date) => {
+                  setShowStartDate(date);
+                  setShowEndDate(date);
+                }}
+                availableTags={timelineTags}
+                onTagsChange={setTimelineTags}
+              />
             </div>
           )}
 

@@ -91,18 +91,31 @@ export interface Event {
   createdAt: string;
   updatedAt: string;
   tags: string[];
+  milestones?: ProductionMilestone[];
   customMilestones?: ProductionMilestone[];
+}
+
+export interface MilestoneTag {
+  id: string;
+  label: string;
+  color: string;
+  isDefault?: boolean;
 }
 
 export interface ProductionMilestone {
   id: string;
-  name: string;
-  category: 'LOAD_IN' | 'SETUP' | 'REHEARSAL' | 'SHOW_DAY' | 'STRIKE' | 'LOAD_OUT' | 'CUSTOM';
-  date: string;
-  time?: string;
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'SCHEDULED' | 'DELAYED';
-  pic?: string;
+  date: string;       // YYYY-MM-DD
+  time?: string;      // HH:mm (e.g. "08:00")
+  title?: string;     // Agenda detail / "ngapain" (fallback to name if empty)
+  tagId?: string;     // Relasi ke tag label
+  tagLabel?: string;  // Nama label ("Show Day", "Load-In", dsb)
+  tagColor?: string;  // Kode warna badge ("rose", "sky", dsb)
   notes?: string;
+  // Field kompatibilitas backward
+  name?: string;
+  category?: 'LOAD_IN' | 'SETUP' | 'REHEARSAL' | 'SHOW_DAY' | 'STRIKE' | 'LOAD_OUT' | 'CUSTOM' | string;
+  status?: 'COMPLETED' | 'IN_PROGRESS' | 'SCHEDULED' | 'DELAYED';
+  pic?: string;
 }
 
 export type BudgetCategoryType =
@@ -301,6 +314,24 @@ export interface Artist {
   contract?: ArtistContract;
   paymentMilestones?: any[];
   notes?: string;
+}
+
+export type RiderGearStatus = 'PENDING_REVIEW' | 'CONFIRMED_INTERNAL' | 'CONFIRMED_VENDOR';
+
+export interface ArtistRiderGearItem {
+  id: string;
+  name: string;
+  isFromErp: boolean;
+  itemId?: string;
+  itemSku?: string;
+  category?: string;
+  status: RiderGearStatus;
+  vendorId?: string;
+  vendorName?: string;
+  notes?: string;
+  quantity?: number;
+  allocatedDate?: string;
+  placementArea?: string;
 }
 
 export type VendorCategory =

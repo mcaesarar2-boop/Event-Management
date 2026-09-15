@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarDays,
   Clock,
@@ -17,29 +17,23 @@ import {
   User,
   Trash2,
   X,
-  Sliders,
   Check,
+  Tag,
 } from 'lucide-react';
-import { Event, ProductionMilestone } from '@/lib/types';
+import { Event, ProductionMilestone, MilestoneTag } from '@/lib/types';
 import { formatDate, calculateDaysUntil } from '@/lib/utils/format';
 import { EventTabType } from './EventDetailHeader';
+import { ProductionTimelineTable } from '../timeline/ProductionTimelineTable';
+import {
+  DEFAULT_MILESTONE_TAGS,
+  getMilestoneColorClasses,
+} from '@/lib/utils/timelineColors';
 
 interface EventTimelineTabProps {
   event: Event;
   onUpdateEvent: (id: string, data: Partial<Event>) => void;
   onNavigateTab: (tab: EventTabType) => void;
   onNavigateView?: (view: any) => void;
-}
-
-interface CorePhaseItem {
-  key: string;
-  field: keyof Event;
-  name: string;
-  category: 'LOAD_IN' | 'SETUP' | 'REHEARSAL' | 'SHOW_DAY' | 'STRIKE' | 'LOAD_OUT';
-  dateStr: string;
-  defaultTime: string;
-  defaultPic: string;
-  description: string;
 }
 
 export function EventTimelineTab({
@@ -49,98 +43,147 @@ export function EventTimelineTab({
   onNavigateView,
 }: EventTimelineTabProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState(false);
+  const [availableTags, setAvailableTags] = useState<MilestoneTag[]>(DEFAULT_MILESTONE_TAGS);
 
-  // Edit core dates form state
-  const [editLoadIn, setEditLoadIn] = useState(event.loadInDate ? event.loadInDate.split('T')[0] : '');
-  const [editSetup, setEditSetup] = useState(event.setupDate ? event.setupDate.split('T')[0] : '');
-  const [editTechReh, setEditTechReh] = useState(event.technicalRehearsalDate ? event.technicalRehearsalDate.split('T')[0] : '');
-  const [editGenReh, setEditGenReh] = useState(event.generalRehearsalDate ? event.generalRehearsalDate.split('T')[0] : '');
-  const [editShowDay, setEditShowDay] = useState(event.eventDayDate ? event.eventDayDate.split('T')[0] : event.startDate.split('T')[0]);
-  const [editStrike, setEditStrike] = useState(event.strikeDate ? event.strikeDate.split('T')[0] : '');
-  const [editLoadOut, setEditLoadOut] = useState(event.loadOutDate ? event.loadOutDate.split('T')[0] : '');
+  // Initial milestones derived from event.milestones or core dates
+  const initialMilestones = useMemo<ProductionMilestone[]>(() => {
+    if (event.milestones && event.milestones.length > 0) {
+      return event.milestones;
+    }
+    if (event.customMilestones && event.customMilestones.length > 0) {
+      return event.customMilestones;
+    }
 
-  // Add custom milestone form state
-  const [customName, setCustomName] = useState('');
-  const [customDate, setCustomDate] = useState(event.startDate.split('T')[0]);
-  const [customTime, setCustomTime] = useState('10:00');
-  const [customPic, setCustomPic] = useState(event.pics?.projectManager || 'Project Manager');
-  const [customCategory, setCustomCategory] = useState<ProductionMilestone['category']>('CUSTOM');
-  const [customNotes, setCustomNotes] = useState('');
+    // Default 7 core phases fallback
+    const list: ProductionMilestone[] = [];
 
-  // Core production phases definition
-  const corePhases: CorePhaseItem[] = [
-    {
-      key: 'loadin',
-      field: 'loadInDate',
-      name: 'Load-In Logistik, Genset & Rigging Truss',
-      category: 'LOAD_IN',
-      dateStr: event.loadInDate || '',
-      defaultTime: '08:00 WIB',
-      defaultPic: event.pics?.productionPIC || 'Production Manager',
-      description: 'Akses loading dock, instalasi generator PLN/Genset, dan pemasangan struktur rigging panggung utama.',
-    },
-    {
-      key: 'setup',
-      field: 'setupDate',
-      name: 'Stage, Audio & Lighting System Setup',
-      category: 'SETUP',
-      dateStr: event.setupDate || '',
-      defaultTime: '09:00 WIB',
-      defaultPic: event.pics?.technicalPIC || 'Technical Director',
-      description: 'Pemasangan FOH sound system, lighting fixtures, LED screen videotron, dan instalasi jalur kabel daya.',
-    },
-    {
-      key: 'techreh',
-      field: 'technicalRehearsalDate',
-      name: 'Technical Rehearsal (Dry Run) & Soundcheck',
-      category: 'REHEARSAL',
-      dateStr: event.technicalRehearsalDate || '',
-      defaultTime: '14:00 WIB',
-      defaultPic: event.pics?.technicalPIC || 'FOH Audio Engineer',
-      description: 'Pengujian sinyal audio multitrack, tuning delay tower speaker, fokus lighting cue, dan tes sinyal LED screen.',
-    },
-    {
-      key: 'genreh',
-      field: 'generalRehearsalDate',
-      name: 'General Rehearsal (GR) / Geladi Bersih',
-      category: 'REHEARSAL',
-      dateStr: event.generalRehearsalDate || '',
-      defaultTime: '19:00 WIB',
-      defaultPic: event.pics?.projectManager || 'Show Director',
-      description: 'Simulasi rundown penuh dari pembukaan hingga penutup bersama pengisi acara, MC, dan seluruh operator panggung.',
-    },
-    {
-      key: 'showday',
-      field: 'eventDayDate',
-      name: 'SHOW DAY (Event Live / Hari-H)',
-      category: 'SHOW_DAY',
-      dateStr: event.eventDayDate || event.startDate || '',
-      defaultTime: '14:00 - 23:30 WIB',
-      defaultPic: event.pics?.eventPIC || 'Event Director',
-      description: 'Penyelenggaraan acara live, open gate, penampilan artis & talent, pengelolaan penonton, hingga show finale.',
-    },
-    {
-      key: 'strike',
-      field: 'strikeDate',
-      name: 'Strike & Stage Dismantling (Bongkaran)',
-      category: 'STRIKE',
-      dateStr: event.strikeDate || '',
-      defaultTime: '00:00 WIB',
-      defaultPic: event.pics?.productionPIC || 'Stage Manager',
-      description: 'Bongkaran sound system, penurunan rigging truss, pelepasan LED modul, dan pengemasan flightcase alat.',
-    },
-    {
-      key: 'loadout',
-      field: 'loadOutDate',
-      name: 'Load-Out, Pembersihan & Serah Terima Venue',
-      category: 'LOAD_OUT',
-      dateStr: event.loadOutDate || '',
-      defaultTime: '18:00 WIB',
-      defaultPic: event.pics?.projectManager || 'Project Manager',
-      description: 'Pengangkutan logistik keluar venue via kontainer truk, inspeksi kebersihan lapangan, dan serah terima pengelola venue.',
-    },
-  ];
+    if (event.loadInDate || event.startDate) {
+      list.push({
+        id: 'ms-loadin',
+        date: (event.loadInDate || event.startDate).split('T')[0],
+        time: '08:00',
+        tagId: 'tag-load-in',
+        tagLabel: 'Load-In & Rigging',
+        tagColor: 'sky',
+        title: 'Load-In Logistik, Genset PLN & Rigging Truss Panggung',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.setupDate) {
+      list.push({
+        id: 'ms-setup',
+        date: event.setupDate.split('T')[0],
+        time: '09:00',
+        tagId: 'tag-setup',
+        tagLabel: 'Setup & Staging',
+        tagColor: 'amber',
+        title: 'Instalasi FOH Sound Console, Lighting Fixtures & LED Screen',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.technicalRehearsalDate) {
+      list.push({
+        id: 'ms-techreh',
+        date: event.technicalRehearsalDate.split('T')[0],
+        time: '14:00',
+        tagId: 'tag-rehearsal',
+        tagLabel: 'Rehearsal / GR',
+        tagColor: 'purple',
+        title: 'Technical Rehearsal (Dry Run), Audio Tuning & Lighting Cue',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.generalRehearsalDate) {
+      list.push({
+        id: 'ms-genreh',
+        date: event.generalRehearsalDate.split('T')[0],
+        time: '19:00',
+        tagId: 'tag-rehearsal',
+        tagLabel: 'Rehearsal / GR',
+        tagColor: 'purple',
+        title: 'General Rehearsal (GR) / Geladi Bersih all talent, MC & stage crew',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.eventDayDate || event.startDate) {
+      list.push({
+        id: 'ms-showday',
+        date: (event.eventDayDate || event.startDate).split('T')[0],
+        time: '14:00',
+        tagId: 'tag-show-day',
+        tagLabel: 'Show Day',
+        tagColor: 'rose',
+        title: 'SHOW DAY (Event Live / Konser Utama)',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.strikeDate) {
+      list.push({
+        id: 'ms-strike',
+        date: event.strikeDate.split('T')[0],
+        time: '00:00',
+        tagId: 'tag-strike',
+        tagLabel: 'Strike / Bongkaran',
+        tagColor: 'orange',
+        title: 'Strike & Stage Dismantling (Bongkaran sound, visual & rigging)',
+        status: 'SCHEDULED',
+      });
+    }
+
+    if (event.loadOutDate || event.endDate) {
+      list.push({
+        id: 'ms-loadout',
+        date: (event.loadOutDate || event.endDate).split('T')[0],
+        time: '18:00',
+        tagId: 'tag-strike',
+        tagLabel: 'Strike / Bongkaran',
+        tagColor: 'orange',
+        title: 'Load-Out, Pembersihan Area & Serah Terima Venue',
+        status: 'SCHEDULED',
+      });
+    }
+
+    return list;
+  }, [event]);
+
+  // Edit State for modal
+  const [editMilestones, setEditMilestones] = useState<ProductionMilestone[]>(initialMilestones);
+
+  useEffect(() => {
+    setEditMilestones(initialMilestones);
+  }, [initialMilestones]);
+
+  // Extract unique tags present across milestones
+  useEffect(() => {
+    if (event.milestones && event.milestones.length > 0) {
+      const customTagsMap = new Map<string, MilestoneTag>();
+      event.milestones.forEach((m) => {
+        if (m.tagId && m.tagLabel && !customTagsMap.has(m.tagId)) {
+          customTagsMap.set(m.tagId, {
+            id: m.tagId,
+            label: m.tagLabel,
+            color: m.tagColor || 'indigo',
+          });
+        }
+      });
+      if (customTagsMap.size > 0) {
+        setAvailableTags((prev) => {
+          const merged = [...prev];
+          customTagsMap.forEach((tag, id) => {
+            if (!merged.some((t) => t.id === id)) {
+              merged.push(tag);
+            }
+          });
+          return merged;
+        });
+      }
+    }
+  }, [event.milestones]);
 
   // Helper to determine status based on date
   const getPhaseStatus = (dateStr: string) => {
@@ -154,50 +197,63 @@ export function EventTimelineTab({
 
   const daysUntilShow = calculateDaysUntil(event.eventDayDate || event.startDate);
 
-  // Save edited core dates
-  const handleSaveCoreDates = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Save Milestones and update event dates
+  const handleSaveMilestones = (updatedMilestones: ProductionMilestone[]) => {
+    const sortedDates = updatedMilestones.map((m) => m.date).filter(Boolean).sort();
+    const minDate = sortedDates[0] || event.startDate?.split('T')[0] || new Date().toISOString().split('T')[0];
+    const maxDate = sortedDates[sortedDates.length - 1] || event.endDate?.split('T')[0] || minDate;
+
+    // Map backwards-compatible phase dates
+    const showDayItem = updatedMilestones.find(
+      (m) => m.tagLabel?.toLowerCase().includes('show') || m.category === 'SHOW_DAY'
+    );
+    const loadInItem =
+      updatedMilestones.find((m) => m.tagLabel?.toLowerCase().includes('load-in') || m.category === 'LOAD_IN') ||
+      updatedMilestones[0];
+    const setupItem =
+      updatedMilestones.find((m) => m.tagLabel?.toLowerCase().includes('setup') || m.category === 'SETUP') ||
+      updatedMilestones[1];
+    const techRehItem = updatedMilestones.find(
+      (m) =>
+        m.tagLabel?.toLowerCase().includes('tech') ||
+        (m.category === 'REHEARSAL' && m.title?.toLowerCase().includes('tech'))
+    );
+    const genRehItem = updatedMilestones.find(
+      (m) =>
+        m.tagLabel?.toLowerCase().includes('gr') ||
+        m.tagLabel?.toLowerCase().includes('general') ||
+        (m.category === 'REHEARSAL' && !m.title?.toLowerCase().includes('tech'))
+    );
+    const strikeItem =
+      updatedMilestones.find((m) => m.tagLabel?.toLowerCase().includes('strike') || m.category === 'STRIKE') ||
+      updatedMilestones[updatedMilestones.length - 2];
+    const loadOutItem =
+      updatedMilestones.find((m) => m.tagLabel?.toLowerCase().includes('load-out') || m.category === 'LOAD_OUT') ||
+      updatedMilestones[updatedMilestones.length - 1] ||
+      strikeItem;
+
+    const eventDayDateTime = showDayItem
+      ? `${showDayItem.date}T${showDayItem.time || '14:00'}:00Z`
+      : `${minDate}T14:00:00Z`;
+
     onUpdateEvent(event.id, {
-      loadInDate: editLoadIn ? `${editLoadIn}T08:00:00Z` : event.loadInDate,
-      setupDate: editSetup ? `${editSetup}T09:00:00Z` : event.setupDate,
-      technicalRehearsalDate: editTechReh ? `${editTechReh}T14:00:00Z` : event.technicalRehearsalDate,
-      generalRehearsalDate: editGenReh ? `${editGenReh}T19:00:00Z` : event.generalRehearsalDate,
-      eventDayDate: editShowDay ? `${editShowDay}T14:00:00Z` : event.eventDayDate,
-      strikeDate: editStrike ? `${editStrike}T00:00:00Z` : event.strikeDate,
-      loadOutDate: editLoadOut ? `${editLoadOut}T18:00:00Z` : event.loadOutDate,
+      startDate: `${minDate}T08:00:00Z`,
+      endDate: `${maxDate}T23:59:00Z`,
+      loadInDate: loadInItem ? `${loadInItem.date}T${loadInItem.time || '08:00'}:00Z` : event.loadInDate,
+      setupDate: setupItem ? `${setupItem.date}T${setupItem.time || '09:00'}:00Z` : event.setupDate,
+      technicalRehearsalDate: techRehItem ? `${techRehItem.date}T${techRehItem.time || '14:00'}:00Z` : event.technicalRehearsalDate,
+      generalRehearsalDate: genRehItem ? `${genRehItem.date}T${genRehItem.time || '19:00'}:00Z` : event.generalRehearsalDate,
+      eventDayDate: eventDayDateTime,
+      strikeDate: strikeItem ? `${strikeItem.date}T${strikeItem.time || '00:00'}:00Z` : event.strikeDate,
+      loadOutDate: loadOutItem ? `${loadOutItem.date}T${loadOutItem.time || '18:00'}:00Z` : event.loadOutDate,
+      milestones: updatedMilestones,
+      customMilestones: updatedMilestones,
     });
+
     setIsEditModalOpen(false);
   };
 
-  // Add custom milestone
-  const handleAddCustomMilestone = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customName.trim()) return;
-
-    const newMilestone: ProductionMilestone = {
-      id: `ms-${Date.now()}`,
-      name: customName,
-      category: customCategory,
-      date: customDate,
-      time: customTime,
-      status: 'SCHEDULED',
-      pic: customPic,
-      notes: customNotes,
-    };
-
-    const updatedList = [...(event.customMilestones || []), newMilestone];
-    onUpdateEvent(event.id, { customMilestones: updatedList });
-
-    setCustomName('');
-    setCustomNotes('');
-    setIsAddCustomModalOpen(false);
-  };
-
-  // Delete custom milestone
-  const handleDeleteCustomMilestone = (id: string) => {
-    const updatedList = (event.customMilestones || []).filter((m) => m.id !== id);
-    onUpdateEvent(event.id, { customMilestones: updatedList });
-  };
+  const activeMilestones = event.milestones && event.milestones.length > 0 ? event.milestones : initialMilestones;
 
   return (
     <div className="space-y-6 pt-5">
@@ -235,15 +291,7 @@ export function EventTimelineTab({
             className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5"
           >
             <Edit2 className="w-3.5 h-3.5" />
-            <span>Edit Tanggal Timeline</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddCustomModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Milestone Custom</span>
+            <span>Edit Tanggal Timeline Produksi</span>
           </button>
         </div>
       </div>
@@ -269,7 +317,7 @@ export function EventTimelineTab({
             <Layers className="w-4 h-4 text-sky-400" />
           </div>
           <div className="text-xl font-bold text-slate-100 mt-2 font-mono">
-            {calculateDaysUntil(event.loadInDate).label}
+            {calculateDaysUntil(event.loadInDate || event.startDate).label}
           </div>
           <div className="text-[11px] text-sky-400 font-medium mt-0.5">
             {event.loadInDate ? formatDate(event.loadInDate) : 'Belum diatur'}
@@ -316,19 +364,29 @@ export function EventTimelineTab({
               Urutan kronologis alur kerja lapangan dari loading, gladi resik, hari pertunjukan, hingga bongkaran.
             </p>
           </div>
-          <span className="text-xs font-mono px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700">
-            {corePhases.length + (event.customMilestones?.length || 0)} Tahapan
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              {activeMilestones.length} Tahapan Terjadwal
+            </span>
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-medium px-2 py-1 rounded hover:bg-slate-850 flex items-center gap-1"
+            >
+              <Edit2 className="w-3 h-3" />
+              <span>Edit Timeline</span>
+            </button>
+          </div>
         </div>
 
         <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
-          {corePhases.map((phase) => {
-            const statusInfo = getPhaseStatus(phase.dateStr);
-            const isShowDay = phase.category === 'SHOW_DAY';
+          {activeMilestones.map((m, idx) => {
+            const statusInfo = getPhaseStatus(m.date);
+            const isShowDay = m.tagLabel?.toLowerCase().includes('show') || m.category === 'SHOW_DAY';
+            const colorStyle = getMilestoneColorClasses(m.tagColor || 'indigo');
 
             return (
               <div
-                key={phase.key}
+                key={m.id || idx}
                 className={`relative p-3.5 rounded-xl border transition group ${
                   isShowDay
                     ? 'bg-rose-950/20 border-rose-800/60 hover:bg-rose-950/30'
@@ -353,37 +411,43 @@ export function EventTimelineTab({
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Tag Pill Badge */}
                       <span
-                        className={`text-xs font-bold ${
-                          isShowDay ? 'text-rose-300' : 'text-slate-200'
-                        }`}
+                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border ${colorStyle.pillBg} ${colorStyle.pillText} ${colorStyle.pillBorder}`}
                       >
-                        {phase.name}
+                        <span className={`w-1.5 h-1.5 rounded-full ${colorStyle.dot}`} />
+                        <span>{m.tagLabel || 'Milestone'}</span>
                       </span>
+
+                      {/* Agenda Title */}
+                      <span className="text-xs font-bold text-slate-100">
+                        {m.title || m.name || 'Agenda Produksi'}
+                      </span>
+
                       {isShowDay && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-900/60 text-rose-300 font-semibold border border-rose-700">
                           Main Target
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      {phase.description}
-                    </p>
+
+                    {m.notes && (
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        {m.notes}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 sm:text-right flex-shrink-0">
                     <div>
                       <div className="text-xs font-semibold text-slate-200 font-mono">
-                        {phase.dateStr ? formatDate(phase.dateStr) : 'Tanggal belum diatur'}
+                        {m.date ? formatDate(m.date) : 'Tanggal belum diatur'}
                       </div>
                       <div className="text-[10px] text-slate-400 flex items-center gap-1 sm:justify-end mt-0.5">
                         <Clock className="w-3 h-3" />
-                        <span>{phase.defaultTime}</span>
-                        <span>&bull;</span>
-                        <User className="w-3 h-3" />
-                        <span>{phase.defaultPic}</span>
+                        <span>{m.time ? `${m.time} WIB` : '08:00 WIB'}</span>
                       </div>
                     </div>
 
@@ -395,272 +459,62 @@ export function EventTimelineTab({
               </div>
             );
           })}
-
-          {/* Render Custom Milestones if Any */}
-          {event.customMilestones && event.customMilestones.length > 0 && (
-            <div className="pt-2 space-y-3">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Milestone & Tahapan Tambahan (Kustom)</span>
-              </div>
-
-              {event.customMilestones.map((ms) => (
-                <div
-                  key={ms.id}
-                  className="relative p-3.5 rounded-xl border bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/40 transition flex items-center justify-between gap-3"
-                >
-                  <div
-                    className="absolute -left-6 top-4 w-4 h-4 rounded-full border-2 bg-indigo-600 border-slate-950 text-white flex items-center justify-center"
-                  >
-                    <span className="w-1 h-1 rounded-full bg-white"></span>
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-bold text-slate-200">{ms.name}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      {ms.notes || 'Milestone operasional tambahan'}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <div className="text-xs font-mono text-slate-200">{formatDate(ms.date)}</div>
-                      <div className="text-[10px] text-slate-400">{ms.time || '10:00 WIB'} &bull; {ms.pic || 'PIC'}</div>
-                    </div>
-
-                    <button
-                      onClick={() => handleDeleteCustomMilestone(ms.id)}
-                      className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition"
-                      title="Hapus milestone"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* EDIT CORE DATES MODAL */}
+      {/* EDIT INTERACTIVE PRODUCTION TIMELINE MODAL */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-xl w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full p-5 space-y-4 my-8">
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  <Edit2 className="w-4 h-4 text-indigo-400" />
+                  <CalendarDays className="w-5 h-5 text-indigo-400" />
                   <span>Edit Tanggal Timeline Produksi</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Ubah tanggal setiap fase. Perubahan akan langsung disinkronkan ke Master Calendar dan sistem logistik.
+                  Kelola jadwal tahapan produksi secara interaktif, lengkap dengan agenda aktivitas ("ngapain") dan label dinamis.
                 </p>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 p-1"
+                className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800 transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCoreDates} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">1. Tanggal Load-In & Rigging</label>
-                  <input
-                    type="date"
-                    value={editLoadIn}
-                    onChange={(e) => setEditLoadIn(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
+            {/* Interactive Table Component */}
+            <ProductionTimelineTable
+              milestones={editMilestones}
+              onChangeMilestones={setEditMilestones}
+              referenceShowDay={event.eventDayDate?.split('T')[0] || event.startDate?.split('T')[0]}
+              availableTags={availableTags}
+              onTagsChange={setAvailableTags}
+            />
 
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">2. Tanggal Setup Stage & FOH</label>
-                  <input
-                    type="date"
-                    value={editSetup}
-                    onChange={(e) => setEditSetup(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">3. Technical Rehearsal (Dry Run)</label>
-                  <input
-                    type="date"
-                    value={editTechReh}
-                    onChange={(e) => setEditTechReh(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">4. General Rehearsal (GR / Geladi)</label>
-                  <input
-                    type="date"
-                    value={editGenReh}
-                    onChange={(e) => setEditGenReh(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-rose-300 font-bold mb-1">5. SHOW DAY (D-Day / Live Acara)</label>
-                  <input
-                    type="date"
-                    value={editShowDay}
-                    onChange={(e) => setEditShowDay(e.target.value)}
-                    className="w-full bg-rose-950/30 border border-rose-800/80 rounded-lg px-3 py-2 text-rose-200 focus:outline-none focus:border-rose-500 font-mono font-bold"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">6. Tanggal Strike (Bongkaran)</label>
-                  <input
-                    type="date"
-                    value={editStrike}
-                    onChange={(e) => setEditStrike(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">7. Tanggal Load-Out & Handover Venue</label>
-                <input
-                  type="date"
-                  value={editLoadOut}
-                  onChange={(e) => setEditLoadOut(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                  required
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md transition"
-                >
-                  Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ADD CUSTOM MILESTONE MODAL */}
-      {isAddCustomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Plus className="w-4 h-4 text-indigo-400" />
-                <span>Tambah Milestone Kustom</span>
-              </h3>
+            {/* Footer Action Buttons */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
               <button
-                onClick={() => setIsAddCustomModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 p-1"
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
               >
-                <X className="w-4 h-4" />
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveMilestones(editMilestones)}
+                className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Simpan Perubahan Timeline</span>
               </button>
             </div>
-
-            <form onSubmit={handleAddCustomMilestone} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">Nama Milestone</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Press Conference Media / Inspeksi Gegana"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">Tanggal</label>
-                  <input
-                    type="date"
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">Waktu</label>
-                  <input
-                    type="text"
-                    placeholder="10:00 WIB"
-                    value={customTime}
-                    onChange={(e) => setCustomTime(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">Penanggung Jawab (PIC)</label>
-                <input
-                  type="text"
-                  value={customPic}
-                  onChange={(e) => setCustomPic(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">Catatan Tambahan</label>
-                <textarea
-                  rows={2}
-                  placeholder="Instruksi khusus atau dependensi..."
-                  value={customNotes}
-                  onChange={(e) => setCustomNotes(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddCustomModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md transition"
-                >
-                  Tambahkan Milestone
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
     </div>
   );
 }
-

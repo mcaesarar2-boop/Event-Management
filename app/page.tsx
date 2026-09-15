@@ -843,9 +843,11 @@ export default function HomePage() {
                   event={selectedEvent}
                   requirements={requirements}
                   artists={artists}
+                  vendors={db.getVendors()}
                   onCreateRequirement={handleCreateRequirement}
                   onUpdateRequirement={handleUpdateRequirement}
                   onDeleteRequirement={handleDeleteRequirement}
+                  onUpdateArtist={handleUpdateArtist}
                   onDispatchLogistics={handleDispatchLogistics}
                 />
               )}

@@ -32,17 +32,22 @@ import {
   Edit2,
   X,
 } from 'lucide-react';
-import { EventRequirement, Event, Artist, RequirementStatus } from '@/lib/types';
+import { EventRequirement, Event, Artist, RequirementStatus, Vendor, ArtistRiderGearItem } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 import { InventoryItemPickerModal } from './InventoryItemPickerModal';
+import { InternalAllocationConfirmModal } from './InternalAllocationConfirmModal';
+import { VendorAssignmentModal } from './VendorAssignmentModal';
+import { normalizeArtistGearList, calculateRiderReadiness } from '@/lib/utils/riderSync';
 
 interface EventLogisticsTabProps {
   event: Event;
   requirements: EventRequirement[];
   artists?: Artist[];
+  vendors?: Vendor[];
   onCreateRequirement: (req: Omit<EventRequirement, 'id' | 'externalSystem'>) => void;
   onUpdateRequirement?: (id: string, data: Partial<EventRequirement>) => void;
   onDeleteRequirement?: (id: string) => void;
+  onUpdateArtist?: (id: string, data: Partial<Artist>) => void;
   onDispatchLogistics?: () => void;
 }
 
@@ -104,13 +109,19 @@ export function EventLogisticsTab({
   event,
   requirements,
   artists = [],
+  vendors = [],
   onCreateRequirement,
   onUpdateRequirement,
   onDeleteRequirement,
+  onUpdateArtist,
 }: EventLogisticsTabProps) {
   // Modal & Picker State
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickerInitialSearch, setPickerInitialSearch] = useState('');
+
+  // Modals for check & recheck
+  const [internalModalGear, setInternalModalGear] = useState<ArtistRiderGearItem | null>(null);
+  const [vendorModalGear, setVendorModalGear] = useState<ArtistRiderGearItem | null>(null);
 
   // View switch: Grid vs List
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -120,58 +131,112 @@ export function EventLogisticsTab({
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
 
-  // Interactive checklist tracking for artist rider items
-  // Key format: `${artistId}_${itemIndex}`
-  const [fulfilledRiders, setFulfilledRiders] = useState<Record<string, boolean>>(() => {
-    // Pre-populate some as fulfilled based on existing requirements
-    const initial: Record<string, boolean> = {};
-    artists.forEach((art, aIdx) => {
-      const riderList = [
-        ...(art.technicalRider?.backlineList || []),
-        ...(art.technicalRider?.microphoneSpec || []),
-      ];
-      riderList.forEach((rText, rIdx) => {
-        const key = `${art.id || aIdx}_${rIdx}`;
-        // If requirements has an item matching part of this rider text, mark fulfilled
-        const isMatched = requirements.some(
-          (req) =>
-            req.itemReference.toLowerCase().includes(rText.toLowerCase().slice(0, 8)) ||
-            rText.toLowerCase().includes(req.itemReference.toLowerCase().slice(0, 8))
-        );
-        if (isMatched) {
-          initial[key] = true;
-        }
-      });
-    });
-    return initial;
-  });
-
   // Selected artist for rider section tabs
   const [activeArtistIndex, setActiveArtistIndex] = useState(0);
   const currentArtist = artists[activeArtistIndex] || artists[0];
 
-  // Flat list of all artist rider items for global KPI calculation
-  const allArtistRiderItems = useMemo(() => {
-    const list: Array<{ key: string; artistName: string; itemText: string }> = [];
-    artists.forEach((art, aIdx) => {
-      const riderItems = [
-        ...(art.technicalRider?.backlineList || []),
-        ...(art.technicalRider?.microphoneSpec || []),
-      ];
-      riderItems.forEach((itemText, rIdx) => {
-        list.push({
-          key: `${art.id || aIdx}_${rIdx}`,
-          artistName: art.name,
-          itemText,
-        });
-      });
-    });
-    return list;
+  const currentArtistGears = useMemo(() => {
+    return normalizeArtistGearList(currentArtist);
+  }, [currentArtist]);
+
+  // Flat list of all artist rider gears across all artists for KPI calculation
+  const allArtistGears = useMemo(() => {
+    return artists.flatMap((a) => normalizeArtistGearList(a));
   }, [artists]);
 
-  const totalRidersCount = allArtistRiderItems.length;
-  const fulfilledRidersCount = allArtistRiderItems.filter((r) => fulfilledRiders[r.key]).length;
+  const totalRidersCount = allArtistGears.length;
+  const fulfilledRidersCount = allArtistGears.filter(
+    (g) => g.status === 'CONFIRMED_INTERNAL' || g.status === 'CONFIRMED_VENDOR'
+  ).length;
 
+  // Confirmation Handlers
+  const handleConfirmInternalAllocation = (data: {
+    quantity: number;
+    unit: string;
+    loadInDate: string;
+    loadOutDate: string;
+    placementArea: string;
+    notes: string;
+  }) => {
+    if (!internalModalGear || !currentArtist) return;
+
+    const updatedGears = currentArtistGears.map((g) => {
+      if (g.id === internalModalGear.id) {
+        return {
+          ...g,
+          status: 'CONFIRMED_INTERNAL' as const,
+          quantity: data.quantity,
+          placementArea: data.placementArea,
+          allocatedDate: data.loadInDate,
+          notes: data.notes,
+        };
+      }
+      return g;
+    });
+
+    if (onUpdateArtist) {
+      onUpdateArtist(currentArtist.id, {
+        technicalRider: {
+          ...currentArtist.technicalRider,
+          gearList: updatedGears,
+          backlineList: updatedGears.map((g) => g.name),
+        },
+      });
+    }
+
+    // Add to event logistics requirements
+    onCreateRequirement({
+      eventId: event.id,
+      itemReference: internalModalGear.name,
+      category: 'BACKLINE',
+      quantity: data.quantity,
+      unit: data.unit || 'unit',
+      requiredDate: data.loadInDate,
+      returnDate: data.loadOutDate,
+      status: 'ALLOCATED',
+      sku: internalModalGear.itemSku || 'ERP-GEAR',
+      placementArea: data.placementArea,
+      notes: `Alokasi Gudang untuk Rider ${currentArtist.name}: ${data.notes || '-'}`,
+      sourceItemId: internalModalGear.itemId,
+      artistName: currentArtist.name,
+      isRiderFulfilled: true,
+    });
+
+    setInternalModalGear(null);
+  };
+
+  const handleConfirmVendorAssignment = (data: {
+    vendorId: string;
+    vendorName: string;
+    notes: string;
+  }) => {
+    if (!vendorModalGear || !currentArtist) return;
+
+    const updatedGears = currentArtistGears.map((g) => {
+      if (g.id === vendorModalGear.id) {
+        return {
+          ...g,
+          status: 'CONFIRMED_VENDOR' as const,
+          vendorId: data.vendorId,
+          vendorName: data.vendorName,
+          notes: data.notes,
+        };
+      }
+      return g;
+    });
+
+    if (onUpdateArtist) {
+      onUpdateArtist(currentArtist.id, {
+        technicalRider: {
+          ...currentArtist.technicalRider,
+          gearList: updatedGears,
+          backlineList: updatedGears.map((g) => g.name),
+        },
+      });
+    }
+
+    setVendorModalGear(null);
+  };
   // KPIs Calculations
   const totalSKUs = requirements.length;
   const totalUnitsReady = requirements
@@ -187,27 +252,6 @@ export function EventLogisticsTab({
     ).length;
     return Math.round((readyItemsCount / requirements.length) * 100);
   }, [requirements]);
-
-  // Toggle rider fulfillment
-  const toggleRiderFulfillment = (key: string) => {
-    setFulfilledRiders((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  // Open Supabase Item Picker with prefilled search from artist rider
-  const handleQuickAllocateFromRider = (riderText: string, keyToFulfill?: string) => {
-    // Extract clean search term (e.g. "Ampeg SVT-CL" -> "Ampeg")
-    const words = riderText.replace(/[^a-zA-Z0-9\s]/g, ' ').trim().split(/\s+/);
-    const searchKeyword = words.slice(0, 2).join(' ') || riderText;
-    setPickerInitialSearch(searchKeyword);
-    setIsPickerOpen(true);
-
-    if (keyToFulfill) {
-      setFulfilledRiders((prev) => ({ ...prev, [keyToFulfill]: true }));
-    }
-  };
 
   // Status badge styling helper
   const getStatusBadge = (status: RequirementStatus) => {
@@ -491,72 +535,180 @@ export function EventLogisticsTab({
                 )}
               </div>
 
-              {/* Rider Checklist Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Backline Items */}
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                    <span>Backline & Instrument Rider:</span>
-                    <span className="text-[10px] text-slate-500">
-                      {currentArtist.technicalRider?.backlineList?.length || 0} item
+              {/* Rider Allocation & Verification Grid */}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <span>Daftar Kebutuhan Rider (Two-Way Verification):</span>
+                    <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                      {currentArtistGears.length} Gear Terdata
                     </span>
                   </div>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                    <span>Status Verifikasi:</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        currentArtistGears.filter(
+                          (g) => g.status === 'CONFIRMED_INTERNAL' || g.status === 'CONFIRMED_VENDOR'
+                        ).length === currentArtistGears.length && currentArtistGears.length > 0
+                          ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                          : 'bg-amber-950 text-amber-400 border-amber-800'
+                      }`}
+                    >
+                      {
+                        currentArtistGears.filter(
+                          (g) => g.status === 'CONFIRMED_INTERNAL' || g.status === 'CONFIRMED_VENDOR'
+                        ).length
+                      }{' '}
+                      / {currentArtistGears.length} Terkonfirmasi
+                    </span>
+                  </div>
+                </div>
 
-                  <div className="space-y-1.5">
-                    {(currentArtist.technicalRider?.backlineList || [
-                      'Ampeg SVT-CL Bass Head + 810E Cab',
-                      'Fender Twin Reverb 65 Reissue',
-                      'Yamaha Absolute Hybrid Maple Drum Set',
-                    ]).map((itemText: string, rIdx: number) => {
-                      const key = `${currentArtist.id || activeArtistIndex}_${rIdx}`;
-                      const isFulfilled = Boolean(fulfilledRiders[key]);
+                {currentArtistGears.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
+                    Belum ada spesifikasi rider alat untuk artis ini. Silakan input pada tab Talent & Riders.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {currentArtistGears.map((gear) => {
+                      const isPending = gear.status === 'PENDING_REVIEW' || !gear.status;
+                      const isInternal = gear.status === 'CONFIRMED_INTERNAL';
+                      const isVendor = gear.status === 'CONFIRMED_VENDOR';
 
                       return (
                         <div
-                          key={rIdx}
-                          className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
-                            isFulfilled
-                              ? 'bg-emerald-950/20 border-emerald-900/40 text-slate-200'
-                              : 'bg-slate-900/90 border-slate-800 text-slate-300'
+                          key={gear.id}
+                          className={`p-3.5 rounded-xl border transition flex flex-col justify-between gap-3 ${
+                            isInternal
+                              ? 'bg-emerald-950/15 border-emerald-800/40'
+                              : isVendor
+                              ? 'bg-cyan-950/15 border-cyan-800/40'
+                              : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
                           }`}
                         >
-                          <button
-                            onClick={() => toggleRiderFulfillment(key)}
-                            className="flex items-center space-x-2.5 text-left min-w-0 flex-1 group"
-                          >
-                            {isFulfilled ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-slate-100">{gear.name}</span>
+                                {gear.isFromErp ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/70">
+                                    <Package className="w-2.5 h-2.5" />
+                                    Gudang ERP
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800/70">
+                                    <Truck className="w-2.5 h-2.5" />
+                                    Non-Gudang / Eksternal
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Details / Notes */}
+                              <div className="text-[11px] text-slate-400 mt-1">
+                                {isInternal && (
+                                  <div className="text-emerald-300/90 space-y-0.5">
+                                    <p className="flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                      Teralokasi dari gudang: {gear.quantity || 1} unit {gear.placementArea ? `• ${gear.placementArea}` : ''}
+                                    </p>
+                                    {gear.allocatedDate && (
+                                      <p className="text-[10px] text-slate-400">Load-in: {gear.allocatedDate}</p>
+                                    )}
+                                  </div>
+                                )}
+                                {isVendor && (
+                                  <div className="text-cyan-300/90 space-y-0.5">
+                                    <p className="flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0" />
+                                      Vendor Rekanan: {gear.vendorName || 'Rekanan Terpilih'}
+                                    </p>
+                                    {gear.notes && (
+                                      <p className="text-[10px] text-slate-400">Catatan: {gear.notes}</p>
+                                    )}
+                                  </div>
+                                )}
+                                {isPending && (
+                                  <p className="text-slate-400 text-[11px]">
+                                    {gear.notes || (gear.isFromErp ? 'Tersedia di katalog gudang internal' : 'Perlu pengadaan rekanan vendor')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="flex-shrink-0">
+                              {isPending && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-amber-950 text-amber-400 border-amber-800">
+                                  Menunggu Verifikasi
+                                </span>
+                              )}
+                              {isInternal && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-emerald-950 text-emerald-400 border-emerald-800">
+                                  Terkonfirmasi (Gudang)
+                                </span>
+                              )}
+                              {isVendor && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-cyan-950 text-cyan-400 border-cyan-800">
+                                  Terkonfirmasi (Vendor)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
+                            {isPending ? (
+                              <>
+                                {gear.isFromErp ? (
+                                  <>
+                                    <button
+                                      onClick={() => setVendorModalGear(gear)}
+                                      className="px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:text-slate-200 transition"
+                                      title="Alihkan pengadaan ke vendor eksternal"
+                                    >
+                                      Opsi Vendor
+                                    </button>
+                                    <button
+                                      onClick={() => setInternalModalGear(gear)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition"
+                                    >
+                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                      <span>Periksa & Alokasikan</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => setInternalModalGear(gear)}
+                                      className="px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:text-slate-200 transition"
+                                      title="Cek ketersediaan di stok gudang internal"
+                                    >
+                                      Cek Gudang
+                                    </button>
+                                    <button
+                                      onClick={() => setVendorModalGear(gear)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow transition"
+                                    >
+                                      <Truck className="w-3.5 h-3.5" />
+                                      <span>Pilih Vendor Rekanan</span>
+                                    </button>
+                                  </>
+                                )}
+                              </>
                             ) : (
-                              <Square className="w-4 h-4 text-slate-500 group-hover:text-slate-400 flex-shrink-0" />
-                            )}
-                            <span
-                              className={`text-xs ${
-                                isFulfilled ? 'line-through text-slate-400 font-normal' : 'font-medium text-slate-100'
-                              }`}
-                            >
-                              {itemText}
-                            </span>
-                          </button>
-
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <span
-                              className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                                isFulfilled
-                                  ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                                  : 'bg-amber-950 text-amber-400 border-amber-800'
-                              }`}
-                            >
-                              {isFulfilled ? 'Terpenuhi' : 'Belum Siap'}
-                            </span>
-
-                            {!isFulfilled && (
                               <button
-                                onClick={() => handleQuickAllocateFromRider(itemText, key)}
-                                title="Cari & Alokasikan dari Gudang"
-                                className="flex items-center space-x-1 px-2 py-1 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white text-[10px] font-bold transition shadow-sm"
+                                onClick={() => {
+                                  if (isInternal) {
+                                    setInternalModalGear(gear);
+                                  } else {
+                                    setVendorModalGear(gear);
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition"
                               >
-                                <Plus className="w-3 h-3" />
-                                <span>Alokasikan</span>
+                                <Edit2 className="w-3 h-3" />
+                                <span>Recheck / Ubah Alokasi</span>
                               </button>
                             )}
                           </div>
@@ -564,80 +716,7 @@ export function EventLogisticsTab({
                       );
                     })}
                   </div>
-                </div>
-
-                {/* Microphone & Monitor Specs */}
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                    <span>Microphone & Wireless System Spec:</span>
-                    <span className="text-[10px] text-slate-500">
-                      {currentArtist.technicalRider?.microphoneSpec?.length || 0} item
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {(currentArtist.technicalRider?.microphoneSpec || [
-                      'Shure Axient Digital Wireless SM58',
-                      'Sennheiser e604 Tom Mics',
-                      'Shure Beta 91A Kick Mic',
-                    ]).map((itemText: string, mIdx: number) => {
-                      const key = `${currentArtist.id || activeArtistIndex}_mic_${mIdx}`;
-                      const isFulfilled = Boolean(fulfilledRiders[key]);
-
-                      return (
-                        <div
-                          key={mIdx}
-                          className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
-                            isFulfilled
-                              ? 'bg-emerald-950/20 border-emerald-900/40 text-slate-200'
-                              : 'bg-slate-900/90 border-slate-800 text-slate-300'
-                          }`}
-                        >
-                          <button
-                            onClick={() => toggleRiderFulfillment(key)}
-                            className="flex items-center space-x-2.5 text-left min-w-0 flex-1 group"
-                          >
-                            {isFulfilled ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                            ) : (
-                              <Square className="w-4 h-4 text-slate-500 group-hover:text-slate-400 flex-shrink-0" />
-                            )}
-                            <span
-                              className={`text-xs ${
-                                isFulfilled ? 'line-through text-slate-400 font-normal' : 'font-medium text-slate-100'
-                              }`}
-                            >
-                              {itemText}
-                            </span>
-                          </button>
-
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <span
-                              className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                                isFulfilled
-                                  ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                                  : 'bg-amber-950 text-amber-400 border-amber-800'
-                              }`}
-                            >
-                              {isFulfilled ? 'Terpenuhi' : 'Belum Siap'}
-                            </span>
-
-                            {!isFulfilled && (
-                              <button
-                                onClick={() => handleQuickAllocateFromRider(itemText, key)}
-                                title="Cari & Alokasikan dari Gudang"
-                                className="flex items-center space-x-1 px-2 py-1 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white text-[10px] font-bold transition shadow-sm"
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>Alokasikan</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -1012,6 +1091,27 @@ export function EventLogisticsTab({
         defaultLoadInDate={event.loadInDate || event.startDate}
         defaultLoadOutDate={event.loadOutDate || event.endDate}
         initialSearch={pickerInitialSearch}
+      />
+
+      {/* 7. Internal Warehouse Check & Recheck Modal */}
+      <InternalAllocationConfirmModal
+        isOpen={Boolean(internalModalGear)}
+        gearItem={internalModalGear}
+        artistName={currentArtist?.name || 'Artis'}
+        defaultLoadInDate={event.loadInDate || event.startDate}
+        defaultLoadOutDate={event.loadOutDate || event.endDate}
+        onClose={() => setInternalModalGear(null)}
+        onConfirm={handleConfirmInternalAllocation}
+      />
+
+      {/* 8. Vendor Assignment Modal */}
+      <VendorAssignmentModal
+        isOpen={Boolean(vendorModalGear)}
+        gearItem={vendorModalGear}
+        artistName={currentArtist?.name || 'Artis'}
+        vendors={vendors}
+        onClose={() => setVendorModalGear(null)}
+        onConfirm={handleConfirmVendorAssignment}
       />
     </div>
   );

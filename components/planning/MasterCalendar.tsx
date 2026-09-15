@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Event, Task } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
+import { getMilestoneColorClasses } from '@/lib/utils/timelineColors';
 
 export type MilestoneType =
   | 'EVENT_DAY'
@@ -31,7 +32,8 @@ export type MilestoneType =
   | 'GR'
   | 'STRIKE'
   | 'LOAD_OUT'
-  | 'TASK_DUE';
+  | 'TASK_DUE'
+  | (string & {});
 
 export interface CalendarEntry {
   id: string;
@@ -41,7 +43,10 @@ export interface CalendarEntry {
   eventName: string;
   venueName?: string;
   city?: string;
-  type: MilestoneType;
+  type: MilestoneType | string;
+  tagLabel?: string;
+  tagColor?: string;
+  title?: string;
   label: string;
   time?: string;
   priority?: string;
@@ -95,165 +100,213 @@ export function MasterCalendar({
     const entries: CalendarEntry[] = [];
 
     events.forEach((evt) => {
-      // 1. Load-In
-      if (evt.loadInDate) {
-        const d = evt.loadInDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-loadin`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'LOAD_IN',
-          label: 'Load-in & Rigging',
-          time: '08:00 WIB',
-          colorClass: {
-            bg: 'bg-sky-950/80',
-            text: 'text-sky-300',
-            border: 'border-sky-700/60',
-            dot: 'bg-sky-400',
-          },
-        });
-      }
+      // Dynamic Production Milestones
+      if (evt.milestones && evt.milestones.length > 0) {
+        evt.milestones.forEach((m, mIdx) => {
+          if (!m.date) return;
+          const colorStyle = getMilestoneColorClasses(m.tagColor || 'indigo');
+          const tagLabel = m.tagLabel || 'Milestone';
+          const title = m.title || m.name || '';
+          const displayLabel = title ? `${tagLabel}: ${title}` : tagLabel;
 
-      // 2. Setup
-      if (evt.setupDate) {
-        const d = evt.setupDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-setup`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'SETUP',
-          label: 'Stage & AV Setup',
-          time: '09:00 WIB',
-          colorClass: {
-            bg: 'bg-amber-950/80',
-            text: 'text-amber-300',
-            border: 'border-amber-700/60',
-            dot: 'bg-amber-400',
-          },
+          entries.push({
+            id: `${evt.id}-ms-${m.id || mIdx}`,
+            dateStr: m.date.split('T')[0],
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: tagLabel,
+            tagLabel: tagLabel,
+            tagColor: m.tagColor || 'indigo',
+            title: title,
+            label: displayLabel,
+            time: m.time ? `${m.time} WIB` : undefined,
+            colorClass: {
+              bg: colorStyle.bg,
+              text: colorStyle.text,
+              border: colorStyle.border,
+              dot: colorStyle.dot,
+            },
+          });
         });
-      }
+      } else {
+        // Fallback for events without custom milestones
+        // 1. Load-In
+        if (evt.loadInDate) {
+          const d = evt.loadInDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-loadin`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'LOAD_IN',
+            tagLabel: 'Load-In & Rigging',
+            tagColor: 'sky',
+            label: 'Load-In & Rigging',
+            time: '08:00 WIB',
+            colorClass: {
+              bg: 'bg-sky-950/80',
+              text: 'text-sky-300',
+              border: 'border-sky-700/60',
+              dot: 'bg-sky-400',
+            },
+          });
+        }
 
-      // 3. Technical Rehearsal / Soundcheck
-      if (evt.technicalRehearsalDate) {
-        const d = evt.technicalRehearsalDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-techreh`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'TECH_REHEARSAL',
-          label: 'Soundcheck & Tech Rehearsal',
-          time: '14:00 WIB',
-          colorClass: {
-            bg: 'bg-purple-950/80',
-            text: 'text-purple-300',
-            border: 'border-purple-700/60',
-            dot: 'bg-purple-400',
-          },
-        });
-      }
+        // 2. Setup
+        if (evt.setupDate) {
+          const d = evt.setupDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-setup`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'SETUP',
+            tagLabel: 'Setup & Staging',
+            tagColor: 'amber',
+            label: 'Stage & AV Setup',
+            time: '09:00 WIB',
+            colorClass: {
+              bg: 'bg-amber-950/80',
+              text: 'text-amber-300',
+              border: 'border-amber-700/60',
+              dot: 'bg-amber-400',
+            },
+          });
+        }
 
-      // 4. General Rehearsal (GR)
-      if (evt.generalRehearsalDate) {
-        const d = evt.generalRehearsalDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-gr`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'GR',
-          label: 'General Rehearsal (GR)',
-          time: '19:00 WIB',
-          colorClass: {
-            bg: 'bg-violet-950/80',
-            text: 'text-violet-300',
-            border: 'border-violet-700/60',
-            dot: 'bg-violet-400',
-          },
-        });
-      }
+        // 3. Technical Rehearsal / Soundcheck
+        if (evt.technicalRehearsalDate) {
+          const d = evt.technicalRehearsalDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-techreh`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'TECH_REHEARSAL',
+            tagLabel: 'Rehearsal / GR',
+            tagColor: 'purple',
+            label: 'Soundcheck & Tech Rehearsal',
+            time: '14:00 WIB',
+            colorClass: {
+              bg: 'bg-purple-950/80',
+              text: 'text-purple-300',
+              border: 'border-purple-700/60',
+              dot: 'bg-purple-400',
+            },
+          });
+        }
 
-      // 5. Main Event Day / Show Day
-      if (evt.eventDayDate || evt.startDate) {
-        const d = (evt.eventDayDate || evt.startDate).split('T')[0];
-        entries.push({
-          id: `${evt.id}-eventday`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'EVENT_DAY',
-          label: 'SHOW DAY (D-Day)',
-          time: '15:00 - 23:00 WIB',
-          colorClass: {
-            bg: 'bg-rose-950/90',
-            text: 'text-rose-200 font-bold',
-            border: 'border-rose-600',
-            dot: 'bg-rose-500 animate-pulse',
-          },
-        });
-      }
+        // 4. General Rehearsal (GR)
+        if (evt.generalRehearsalDate) {
+          const d = evt.generalRehearsalDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-gr`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'GR',
+            tagLabel: 'Rehearsal / GR',
+            tagColor: 'purple',
+            label: 'General Rehearsal (GR)',
+            time: '19:00 WIB',
+            colorClass: {
+              bg: 'bg-violet-950/80',
+              text: 'text-violet-300',
+              border: 'border-violet-700/60',
+              dot: 'bg-violet-400',
+            },
+          });
+        }
 
-      // 6. Strike / Bongkar
-      if (evt.strikeDate) {
-        const d = evt.strikeDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-strike`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'STRIKE',
-          label: 'Strike & Dismantle',
-          time: '00:00 WIB',
-          colorClass: {
-            bg: 'bg-orange-950/80',
-            text: 'text-orange-300',
-            border: 'border-orange-700/60',
-            dot: 'bg-orange-400',
-          },
-        });
-      }
+        // 5. Main Event Day / Show Day
+        if (evt.eventDayDate || evt.startDate) {
+          const d = (evt.eventDayDate || evt.startDate).split('T')[0];
+          entries.push({
+            id: `${evt.id}-eventday`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'EVENT_DAY',
+            tagLabel: 'Show Day',
+            tagColor: 'rose',
+            label: 'SHOW DAY (D-Day)',
+            time: '15:00 - 23:00 WIB',
+            colorClass: {
+              bg: 'bg-rose-950/90',
+              text: 'text-rose-200 font-bold',
+              border: 'border-rose-600',
+              dot: 'bg-rose-500 animate-pulse',
+            },
+          });
+        }
 
-      // 7. Load-Out
-      if (evt.loadOutDate) {
-        const d = evt.loadOutDate.split('T')[0];
-        entries.push({
-          id: `${evt.id}-loadout`,
-          dateStr: d,
-          eventId: evt.id,
-          eventCode: evt.code,
-          eventName: evt.name,
-          venueName: evt.venueName,
-          city: evt.city,
-          type: 'LOAD_OUT',
-          label: 'Load-out & Venue Handover',
-          time: '20:00 WIB',
-          colorClass: {
-            bg: 'bg-slate-900',
-            text: 'text-slate-300',
-            border: 'border-slate-700',
-            dot: 'bg-slate-400',
-          },
-        });
+        // 6. Strike / Bongkar
+        if (evt.strikeDate) {
+          const d = evt.strikeDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-strike`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'STRIKE',
+            tagLabel: 'Strike / Bongkaran',
+            tagColor: 'orange',
+            label: 'Strike & Dismantle',
+            time: '00:00 WIB',
+            colorClass: {
+              bg: 'bg-orange-950/80',
+              text: 'text-orange-300',
+              border: 'border-orange-700/60',
+              dot: 'bg-orange-400',
+            },
+          });
+        }
+
+        // 7. Load-Out
+        if (evt.loadOutDate) {
+          const d = evt.loadOutDate.split('T')[0];
+          entries.push({
+            id: `${evt.id}-loadout`,
+            dateStr: d,
+            eventId: evt.id,
+            eventCode: evt.code,
+            eventName: evt.name,
+            venueName: evt.venueName,
+            city: evt.city,
+            type: 'LOAD_OUT',
+            tagLabel: 'Strike / Bongkaran',
+            tagColor: 'orange',
+            label: 'Load-out & Venue Handover',
+            time: '20:00 WIB',
+            colorClass: {
+              bg: 'bg-slate-900',
+              text: 'text-slate-300',
+              border: 'border-slate-700',
+              dot: 'bg-slate-400',
+            },
+          });
+        }
       }
     });
 
@@ -285,15 +338,59 @@ export function MasterCalendar({
     return entries;
   }, [events, tasks]);
 
+  // Extract unique active milestone tags across all entries
+  const activeMilestoneTags = useMemo(() => {
+    const tagMap = new Map<string, { label: string; color: string }>();
+    allEntries.forEach((entry) => {
+      if (entry.type !== 'TASK_DUE') {
+        const key = entry.type;
+        if (!tagMap.has(key)) {
+          tagMap.set(key, {
+            label: entry.tagLabel || entry.type,
+            color:
+              entry.tagColor ||
+              (entry.type === 'EVENT_DAY'
+                ? 'rose'
+                : entry.type === 'LOAD_IN'
+                ? 'sky'
+                : entry.type === 'SETUP'
+                ? 'amber'
+                : entry.type === 'TECH_REHEARSAL' || entry.type === 'GR'
+                ? 'purple'
+                : entry.type === 'STRIKE' || entry.type === 'LOAD_OUT'
+                ? 'orange'
+                : 'indigo'),
+          });
+        }
+      }
+    });
+    return Array.from(tagMap.entries()).map(([key, val]) => ({
+      key,
+      label: val.label,
+      color: val.color,
+    }));
+  }, [allEntries]);
+
   // Filtered entries
   const filteredEntries = useMemo(() => {
     return allEntries.filter((e) => {
       const matchesEvent = selectedEventFilter === 'ALL' || e.eventId === selectedEventFilter;
       const matchesCategory =
         selectedCategoryFilter === 'ALL' ||
-        (selectedCategoryFilter === 'D_DAY' && e.type === 'EVENT_DAY') ||
-        (selectedCategoryFilter === 'LOGISTICS' && (e.type === 'LOAD_IN' || e.type === 'SETUP' || e.type === 'STRIKE' || e.type === 'LOAD_OUT')) ||
-        (selectedCategoryFilter === 'REHEARSAL' && (e.type === 'TECH_REHEARSAL' || e.type === 'GR')) ||
+        e.type === selectedCategoryFilter ||
+        (selectedCategoryFilter === 'D_DAY' && (e.type === 'EVENT_DAY' || e.type.toLowerCase().includes('show'))) ||
+        (selectedCategoryFilter === 'LOGISTICS' &&
+          (e.type === 'LOAD_IN' ||
+            e.type === 'SETUP' ||
+            e.type === 'STRIKE' ||
+            e.type === 'LOAD_OUT' ||
+            e.type.toLowerCase().includes('load') ||
+            e.type.toLowerCase().includes('strike'))) ||
+        (selectedCategoryFilter === 'REHEARSAL' &&
+          (e.type === 'TECH_REHEARSAL' ||
+            e.type === 'GR' ||
+            e.type.toLowerCase().includes('rehearsal') ||
+            e.type.toLowerCase().includes('gr'))) ||
         (selectedCategoryFilter === 'TASKS' && e.type === 'TASK_DUE');
 
       return matchesEvent && matchesCategory;
@@ -552,22 +649,20 @@ export function MasterCalendar({
           </button>
         </div>
 
-        {/* Legend Indicators */}
-        <div className="hidden lg:flex items-center gap-3 text-[11px] text-slate-400">
+        {/* Dynamic Legend Indicators */}
+        <div className="hidden lg:flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap max-w-[500px]">
+          {activeMilestoneTags.slice(0, 6).map((tag) => {
+            const style = getMilestoneColorClasses(tag.color);
+            return (
+              <span key={tag.key} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${style.dot}`}></span>
+                <span className="truncate max-w-[120px]">{tag.label}</span>
+              </span>
+            );
+          })}
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> D-Day Show
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span> Load-in
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Setup & Staging
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-400"></span> Rehearsal (GR)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Task Due
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>Task Due</span>
           </span>
         </div>
 
@@ -587,16 +682,18 @@ export function MasterCalendar({
             ))}
           </select>
 
-          {/* Filter Category */}
+          {/* Filter Category / Dynamic Milestone Tags */}
           <select
             value={selectedCategoryFilter}
             onChange={(e) => setSelectedCategoryFilter(e.target.value)}
             className="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
           >
-            <option value="ALL">Semua Tipe Milestone</option>
-            <option value="D_DAY">Show Day (D-Day) Saja</option>
-            <option value="LOGISTICS">Logistik & Rigging (Load-in/Strike)</option>
-            <option value="REHEARSAL">Soundcheck & GR Saja</option>
+            <option value="ALL">Semua Tipe Milestone ({allEntries.length})</option>
+            {activeMilestoneTags.map((tag) => (
+              <option key={tag.key} value={tag.key}>
+                {tag.label}
+              </option>
+            ))}
             <option value="TASKS">Deadline Tugas Saja</option>
           </select>
         </div>

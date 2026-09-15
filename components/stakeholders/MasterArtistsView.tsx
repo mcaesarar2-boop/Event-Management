@@ -21,8 +21,10 @@ import {
   Calendar,
   Building2,
 } from 'lucide-react';
-import { Artist, Event, ArtistType, ArtistBookingStatus } from '@/lib/types';
+import { Artist, Event, ArtistType, ArtistBookingStatus, ArtistRiderGearItem } from '@/lib/types';
 import { formatIDR } from '@/lib/utils/format';
+import { RiderGearComboboxInput } from '@/components/events/detail/RiderGearComboboxInput';
+import { normalizeArtistGearList } from '@/lib/utils/riderSync';
 
 interface MasterArtistsViewProps {
   artists: Artist[];
@@ -86,6 +88,7 @@ export function MasterArtistsView({
   const [email, setEmail] = useState('');
   const [fee, setFee] = useState<number>(100000000);
   const [audioRequirement, setAudioRequirement] = useState('');
+  const [gearList, setGearList] = useState<ArtistRiderGearItem[]>([]);
   const [stagePlotAttached, setStagePlotAttached] = useState(true);
   const [dressingRooms, setDressingRooms] = useState('');
   const [hotelRequirement, setHotelRequirement] = useState('');
@@ -105,6 +108,7 @@ export function MasterArtistsView({
     setEmail('');
     setFee(100000000);
     setAudioRequirement('FOH Console Avid S6L / DiGiCo SD12, IEM Sennheiser G4');
+    setGearList([]);
     setStagePlotAttached(true);
     setDressingRooms('1 Ruang VIP AC dingin dengan cermin make-up dan sofa');
     setHotelRequirement('Hotel Bintang 5 Dekat Venue (1 Suite + 4 Deluxe)');
@@ -134,6 +138,7 @@ export function MasterArtistsView({
       artist.technicalRider?.audioRequirement ||
         'FOH Console Avid S6L / DiGiCo SD12, IEM Sennheiser G4'
     );
+    setGearList(normalizeArtistGearList(artist));
     setStagePlotAttached(Boolean(artist.technicalRider?.stagePlotAttached));
     setDressingRooms(
       artist.hospitalityRider?.dressingRooms ||
@@ -175,9 +180,10 @@ export function MasterArtistsView({
       notes: notes.trim(),
       technicalRider: {
         stageRequirement: 'Panggung Utama min 16m x 12m',
-        audioRequirement: audioRequirement.trim(),
+        audioRequirement: audioRequirement.trim() || (gearList.length > 0 ? gearList.map(g => g.name).join(', ') : 'Standard Live PA & Monitoring'),
         monitorSystem: '12 Mix Stereo IEM',
-        backlineList: ['Drum Pearl Masters', 'Ampli Marshall JCM900', 'Ampli Ampeg SVT-CL'],
+        gearList,
+        backlineList: gearList.length > 0 ? gearList.map(g => g.name) : ['Drum Pearl Masters', 'Ampli Marshall JCM900', 'Ampli Ampeg SVT-CL'],
         microphoneSpec: ['Shure Axient Digital', 'Neumann KMS105'],
         lightingMood: 'Dynamic Concert & Strobe',
         videoVisualSpec: '4K LED Wall Screen 3.9mm',
@@ -706,16 +712,12 @@ export function MasterArtistsView({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Kebutuhan Audio & Panggung (Technical Rider)</label>
-                    <textarea
-                      rows={2}
-                      value={audioRequirement}
-                      onChange={(e) => setAudioRequirement(e.target.value)}
-                      placeholder="Contoh: FOH Console Avid S6L / DiGiCo SD12, 12 Monitor IEM Sennheiser G4."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                  <RiderGearComboboxInput
+                    items={gearList}
+                    onChange={setGearList}
+                    label="Kebutuhan Audio & Panggung (Technical Rider - Smart Autocomplete)"
+                    placeholder="Cari alat di katalog gudang ERP (misal DiGiCo, Marshall, Yamaha) atau ketik kebutuhan vendor eksternal..."
+                  />
 
                   <div className="flex items-center gap-2 pt-1">
                     <input

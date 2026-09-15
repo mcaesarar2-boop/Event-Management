@@ -90,7 +90,7 @@ export default function LoginPage() {
                 EMS Enterprise
               </h1>
               <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800/60">
-                v2.4
+                v1.6.1
               </span>
             </div>
             <p className="text-xs text-indigo-300/80 font-medium tracking-wide mt-0.5 uppercase">

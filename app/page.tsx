@@ -316,6 +316,16 @@ export default function HomePage() {
     triggerUpdate();
   };
 
+  const handleUpdateRequirement = (id: string, data: Partial<EventRequirement>) => {
+    db.updateRequirement(id, data);
+    triggerUpdate();
+  };
+
+  const handleDeleteRequirement = (id: string) => {
+    db.deleteRequirement(id);
+    triggerUpdate();
+  };
+
   const handleDispatchLogistics = () => {
     if (!selectedEventId) return;
     db.dispatchLogisticsRequest(selectedEventId);
@@ -827,12 +837,15 @@ export default function HomePage() {
                 />
               )}
 
-              {/* Tab 9: ERP Logistics Hub */}
+              {/* Tab 9: Logistik & Alat Event */}
               {activeTab === 'LOGISTICS_ERP' && (
                 <EventLogisticsTab
                   event={selectedEvent}
                   requirements={requirements}
+                  artists={artists}
                   onCreateRequirement={handleCreateRequirement}
+                  onUpdateRequirement={handleUpdateRequirement}
+                  onDeleteRequirement={handleDeleteRequirement}
                   onDispatchLogistics={handleDispatchLogistics}
                 />
               )}

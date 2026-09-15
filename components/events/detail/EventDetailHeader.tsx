@@ -128,9 +128,7 @@ export function EventDetailHeader({
     { id: 'CREW', label: 'Crew Roster' },
     {
       id: 'LOGISTICS_ERP',
-      label: 'ERP Logistics Hub',
-      badge: 'mcaesarar2-boop',
-      badgeColor: 'bg-indigo-950 text-indigo-400 border-indigo-800',
+      label: 'Logistik & Alat Event',
     },
     { id: 'RISKS', label: 'Risk Register' },
     { id: 'DOCUMENTS', label: 'Documents' },

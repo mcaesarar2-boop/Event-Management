@@ -1173,6 +1173,22 @@ class EventSystemStore {
     return newReq;
   }
 
+  updateRequirement(id: UUID, data: Partial<EventRequirement>): EventRequirement | undefined {
+    const req = this.requirements.find((r) => r.id === id);
+    if (!req) return undefined;
+    Object.assign(req, data);
+    this.logAudit('UPDATE', 'EventRequirement', id, undefined, `Updated logistics requirement: ${req.itemReference}`, req.eventId);
+    return req;
+  }
+
+  deleteRequirement(id: UUID): boolean {
+    const idx = this.requirements.findIndex((r) => r.id === id);
+    if (idx === -1) return false;
+    const removed = this.requirements.splice(idx, 1)[0];
+    this.logAudit('DELETE', 'EventRequirement', id, undefined, `Deleted logistics requirement: ${removed.itemReference}`, removed.eventId);
+    return true;
+  }
+
   dispatchLogisticsRequest(eventId: UUID, requirementIds?: UUID[]): { success: boolean; message: string; payload: any } {
     const targetReqs = this.requirements.filter(
       (r) => r.eventId === eventId && (!requirementIds || requirementIds.includes(r.id))

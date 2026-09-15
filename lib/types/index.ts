@@ -878,6 +878,13 @@ export interface EventRequirement {
   reservedAt?: string;
   deliveredAt?: string;
   warehouseAssigned?: string;
+  sku?: string;
+  imageUrl?: string;
+  placementArea?: string;
+  allocatedQuantity?: number;
+  sourceItemId?: string;
+  artistName?: string;
+  isRiderFulfilled?: boolean;
 }
 
 export type PaymentApprovalStatus =

@@ -446,8 +446,8 @@ export function EventOverviewTab({
             <Truck className="w-4 h-4" />
             <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition" />
           </div>
-          <div className="text-xs font-bold text-indigo-200 mt-2">ERP Logistics Hub</div>
-          <div className="text-[10px] text-indigo-400/80 mt-0.5">mcaesarar2-boop bridge</div>
+          <div className="text-xs font-bold text-indigo-200 mt-2">Logistik & Alat Event</div>
+          <div className="text-[10px] text-indigo-400/80 mt-0.5">Alokasi alat & inventaris event</div>
         </button>
 
         <button

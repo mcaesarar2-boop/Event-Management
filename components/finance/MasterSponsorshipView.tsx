@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Handshake,
   Plus,
@@ -33,6 +33,9 @@ import {
   Shirt,
   Users,
   Lock,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import {
   SponsorshipItem,
@@ -43,6 +46,7 @@ import {
   Event,
 } from '@/lib/types';
 import { formatIDR, formatCompactIDR, formatDate } from '@/lib/utils/format';
+import { uploadSponsorLogo } from '@/lib/supabase/storage';
 
 interface MasterSponsorshipViewProps {
   sponsorships: SponsorshipItem[];
@@ -131,6 +135,12 @@ export function MasterSponsorshipView({
   const [contractNumber, setContractNumber] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Logo upload state
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Pool of all available master brands for auto-fill
   const masterBrandCatalog = useMemo(() => {
     const combined = allSponsors.length > 0 ? allSponsors : sponsorships;
@@ -164,6 +174,10 @@ export function MasterSponsorshipView({
     setInKindDetails('');
     setContractNumber('');
     setNotes('');
+    setLogoFile(null);
+    setLogoPreview(null);
+    setIsUploadingLogo(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setEditingSponsor(null);
   };
 
@@ -197,6 +211,9 @@ export function MasterSponsorshipView({
     setInKindDetails(item.inKindDetails || '');
     setContractNumber(item.contractNumber || '');
     setNotes(item.notes || '');
+    setLogoFile(null);
+    setLogoPreview(item.logoUrl || null);
+    setIsUploadingLogo(false);
     setIsFormModalOpen(true);
   };
 
@@ -205,11 +222,50 @@ export function MasterSponsorshipView({
     setDeletingSponsor(item);
   };
 
-  const handleSaveSponsorship = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      alert('Format file tidak didukung. Harap gunakan file gambar PNG, JPG, WebP, atau SVG.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file terlalu besar. Maksimal ukuran logo adalah 5MB.');
+      return;
+    }
+
+    setLogoFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setLogoPreview(previewUrl);
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSaveSponsorship = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sponsorName.trim()) {
       alert('Nama perusahaan sponsor wajib diisi.');
       return;
+    }
+
+    let finalLogoUrl = logoPreview;
+
+    if (logoFile) {
+      setIsUploadingLogo(true);
+      const uploadRes = await uploadSponsorLogo(logoFile);
+      setIsUploadingLogo(false);
+      if (!uploadRes.success || !uploadRes.publicUrl) {
+        alert(`Gagal mengupload logo: ${uploadRes.error || 'Terjadi kendala sistem.'}`);
+        return;
+      }
+      finalLogoUrl = uploadRes.publicUrl;
     }
 
     const resolvedTier =
@@ -239,6 +295,7 @@ export function MasterSponsorshipView({
       inKindDetails: inKindDetails.trim(),
       contractNumber: contractNumber.trim(),
       contractDate: editingSponsor?.contractDate || new Date().toISOString().split('T')[0],
+      logoUrl: finalLogoUrl || undefined,
       notes: notes.trim(),
     };
 
@@ -333,8 +390,43 @@ export function MasterSponsorshipView({
     return Building2;
   };
 
+  const getTierColorStyles = (tierStr?: string) => {
+    if (!tierStr) return { border: 'border-slate-700', bg: 'bg-slate-800/80', text: 'text-slate-300' };
+    const lower = tierStr.toLowerCase();
+    if (lower.includes('platinum') || lower.includes('title') || lower.includes('utama')) {
+      return { border: 'border-cyan-500/40', bg: 'bg-cyan-500/10', text: 'text-cyan-300' };
+    }
+    if (lower.includes('gold') || lower.includes('madya')) {
+      return { border: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-300' };
+    }
+    if (lower.includes('silver') || lower.includes('pendamping')) {
+      return { border: 'border-slate-400/40', bg: 'bg-slate-500/10', text: 'text-slate-200' };
+    }
+    if (lower.includes('bronze') || lower.includes('pendukung')) {
+      return { border: 'border-orange-500/40', bg: 'bg-orange-500/10', text: 'text-orange-300' };
+    }
+    if (lower.includes('eksklusif') || lower.includes('exclusive')) {
+      return { border: 'border-purple-500/40', bg: 'bg-purple-500/10', text: 'text-purple-300' };
+    }
+    if (lower.includes('media') || lower.includes('partner') || lower.includes('mitra')) {
+      return { border: 'border-indigo-500/40', bg: 'bg-indigo-500/10', text: 'text-indigo-300' };
+    }
+    return { border: 'border-slate-700', bg: 'bg-slate-800/80', text: 'text-slate-300' };
+  };
+
+  const getBrandInitial = (name?: string) => {
+    if (!name) return 'SP';
+    const clean = name.replace(/^PT\.?\s+/i, '').trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return clean.slice(0, 2).toUpperCase();
+  };
+
   const eventLinkedToSelected = events.find((e) => e.id === selectedSponsor?.eventId);
   const eventLinkedToDeleting = events.find((e) => e.id === deletingSponsor?.eventId);
+  const selectedTierColors = selectedSponsor ? getTierColorStyles(selectedSponsor.tier) : null;
 
   const currentEvent = selectedEventFilterId ? events.find((e) => e.id === selectedEventFilterId) : undefined;
 
@@ -512,7 +604,7 @@ export function MasterSponsorshipView({
           const ev = events.find((e) => e.id === sponsor.eventId);
           const isSelected = selectedSponsor?.id === sponsor.id;
           const TierIcon = getTierIcon(sponsor.tier);
-
+          const tierColors = getTierColorStyles(sponsor.tier);
           const isCash = sponsor.type === 'CASH';
 
           return (
@@ -526,53 +618,72 @@ export function MasterSponsorshipView({
               }`}
             >
               <div className="space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="pr-2">
-                    <div className="flex items-center gap-1.5">
-                      <div className="font-bold text-white text-base leading-tight">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Left: Logo & Brand Info */}
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div
+                      className={`w-14 h-14 rounded-xl border flex items-center justify-center p-1.5 shrink-0 bg-slate-950/80 shadow-sm overflow-hidden ${
+                        sponsor.logoUrl ? 'border-slate-800' : `${tierColors.border} ${tierColors.bg}`
+                      }`}
+                    >
+                      {sponsor.logoUrl ? (
+                        <img
+                          src={sponsor.logoUrl}
+                          alt={sponsor.brandName || sponsor.sponsorName}
+                          className="w-full h-full object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className={`text-base font-black tracking-wider ${tierColors.text}`}>
+                          {getBrandInitial(sponsor.brandName || sponsor.sponsorName)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="font-bold text-white text-base leading-tight truncate">
                         {sponsor.brandName || sponsor.sponsorName}
                       </div>
-                    </div>
-                    <div className="text-xs text-slate-400 truncate mt-0.5">
-                      {sponsor.sponsorName}
+                      <div className="text-xs text-slate-400 truncate mt-0.5">
+                        {sponsor.sponsorName}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
+                            isCash
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
+                          }`}
+                        >
+                          {isCash ? 'Cash' : 'In-Kind'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                        isCash
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
-                      }`}
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition shrink-0">
+                    <button
+                      onClick={(e) => handleOpenEditModal(sponsor, e)}
+                      title="Edit Kontrak / Nominal Sponsor"
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition"
                     >
-                      {isCash ? 'Cash' : 'In-Kind'}
-                    </span>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
-                      <button
-                        onClick={(e) => handleOpenEditModal(sponsor, e)}
-                        title="Edit Kontrak / Nominal Sponsor"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => handleOpenDeleteModal(sponsor, e)}
-                        title="Hapus Sponsor"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => handleOpenDeleteModal(sponsor, e)}
+                      title="Hapus Sponsor"
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
                 {/* Tier Badge */}
-                <div className="flex items-center gap-1.5 bg-slate-950 p-2 rounded-lg border border-slate-800 text-xs">
-                  <TierIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  <span className="font-semibold text-amber-200 truncate">{sponsor.tier}</span>
+                <div className={`flex items-center gap-1.5 p-2 rounded-lg border text-xs ${tierColors.bg} ${tierColors.border}`}>
+                  <TierIcon className={`w-3.5 h-3.5 flex-shrink-0 ${tierColors.text}`} />
+                  <span className={`font-semibold truncate ${tierColors.text}`}>{sponsor.tier}</span>
                 </div>
 
                 {/* Details Breakdown */}
@@ -663,36 +774,58 @@ export function MasterSponsorshipView({
       </div>
 
       {/* Selected Sponsor Detail Drawer */}
-      {selectedSponsor && (
+      {selectedSponsor && selectedTierColors && (
         <div className="bg-slate-900 border border-indigo-500/40 rounded-2xl p-6 shadow-xl space-y-5 animate-in fade-in duration-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-            <div>
-              <div className="text-xs text-indigo-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                <Handshake className="w-3.5 h-3.5" />
-                DETAIL KONTRAK & DELIVERABLES SPONSOR
-              </div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2 mt-0.5">
-                {selectedSponsor.brandName || selectedSponsor.sponsorName}
-                <span className="text-xs font-normal px-2.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">
-                  {selectedSponsor.tier}
-                </span>
-                <span
-                  className={`text-xs font-normal px-2 py-0.5 rounded ${
-                    selectedSponsor.type === 'CASH'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
-                      : 'bg-sky-950 text-sky-300 border border-sky-800/40'
-                  }`}
-                >
-                  {selectedSponsor.type === 'CASH' ? 'Cash Sponsorship' : 'In-Kind Barter'}
-                </span>
-              </h2>
-              <div className="text-xs text-slate-400 mt-1">
-                Perusahaan: <span className="text-white font-medium">{selectedSponsor.sponsorName}</span> • Event:{' '}
-                {eventLinkedToSelected ? (
-                  <span className="text-indigo-300 font-medium">{eventLinkedToSelected.name}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div className="flex items-start gap-4">
+              <div
+                className={`w-16 h-16 rounded-xl border flex items-center justify-center p-2 shrink-0 bg-slate-950/90 shadow-md overflow-hidden ${
+                  selectedSponsor.logoUrl
+                    ? 'border-slate-800'
+                    : `${selectedTierColors.border} ${selectedTierColors.bg}`
+                }`}
+              >
+                {selectedSponsor.logoUrl ? (
+                  <img
+                    src={selectedSponsor.logoUrl}
+                    alt={selectedSponsor.brandName || selectedSponsor.sponsorName}
+                    className="w-full h-full object-contain"
+                  />
                 ) : (
-                  <span className="text-slate-400 font-medium">Master Brand Saja (Belum Ditugaskan)</span>
+                  <span className={`text-xl font-black tracking-wider ${selectedTierColors.text}`}>
+                    {getBrandInitial(selectedSponsor.brandName || selectedSponsor.sponsorName)}
+                  </span>
                 )}
+              </div>
+
+              <div>
+                <div className="text-xs text-indigo-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                  <Handshake className="w-3.5 h-3.5" />
+                  DETAIL KONTRAK & DELIVERABLES SPONSOR
+                </div>
+                <h2 className="text-xl font-bold text-white flex flex-wrap items-center gap-2 mt-0.5">
+                  {selectedSponsor.brandName || selectedSponsor.sponsorName}
+                  <span className={`text-xs font-normal px-2.5 py-0.5 rounded border ${selectedTierColors.bg} ${selectedTierColors.border} ${selectedTierColors.text}`}>
+                    {selectedSponsor.tier}
+                  </span>
+                  <span
+                    className={`text-xs font-normal px-2 py-0.5 rounded ${
+                      selectedSponsor.type === 'CASH'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
+                        : 'bg-sky-950 text-sky-300 border border-sky-800/40'
+                    }`}
+                  >
+                    {selectedSponsor.type === 'CASH' ? 'Cash Sponsorship' : 'In-Kind Barter'}
+                  </span>
+                </h2>
+                <div className="text-xs text-slate-400 mt-1">
+                  Perusahaan: <span className="text-white font-medium">{selectedSponsor.sponsorName}</span> • Event:{' '}
+                  {eventLinkedToSelected ? (
+                    <span className="text-indigo-300 font-medium">{eventLinkedToSelected.name}</span>
+                  ) : (
+                    <span className="text-slate-400 font-medium">Master Brand Saja (Belum Ditugaskan)</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -832,6 +965,13 @@ export function MasterSponsorshipView({
                         if (found.deliverables) setDeliverables(found.deliverables);
                         if (found.inKindDetails) setInKindDetails(found.inKindDetails);
                         if (found.notes) setNotes(found.notes);
+                        if (found.logoUrl) {
+                          setLogoPreview(found.logoUrl);
+                          setLogoFile(null);
+                        } else {
+                          setLogoPreview(null);
+                          setLogoFile(null);
+                        }
                       }
                     }}
                     className="w-full bg-slate-950 border border-indigo-700/50 rounded-lg px-3 py-2 text-xs text-indigo-200 focus:outline-none focus:border-indigo-400"
@@ -854,6 +994,82 @@ export function MasterSponsorshipView({
                 <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5" />
                   <span>1. Identitas Brand Sponsor & Penugasan Event</span>
+                </div>
+
+                {/* Logo Upload Dropzone / Thumbnail Preview */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                      Logo Brand / Perusahaan Sponsor
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      PNG, JPG, WebP, SVG (Maks. 5MB)
+                    </span>
+                  </label>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+
+                  {logoPreview ? (
+                    <div className="flex items-center gap-4 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                      <div className="w-20 h-16 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center p-1.5 shrink-0 overflow-hidden shadow-inner">
+                        <img
+                          src={logoPreview}
+                          alt="Preview Logo"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-slate-200 truncate">
+                          {logoFile ? logoFile.name : 'Logo Brand Terpasang'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {logoFile
+                            ? `${(logoFile.size / 1024).toFixed(1)} KB • Siap diunggah ke Supabase Storage saat disimpan`
+                            : 'Tersimpan aktif di Database & Supabase Storage'}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-2.5 py-1 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition flex items-center gap-1"
+                          >
+                            <Upload className="w-3 h-3 text-indigo-400" />
+                            Ganti File Logo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            className="px-2.5 py-1 text-[11px] font-medium bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 text-rose-300 rounded-lg transition flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            Hapus Logo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-950/50 hover:bg-slate-950 rounded-xl p-4 transition cursor-pointer flex flex-col items-center justify-center text-center group"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-indigo-950/60 border border-indigo-800/40 text-indigo-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-semibold text-slate-200 group-hover:text-indigo-300 transition">
+                        Pilih atau Unggah Logo Brand
+                      </span>
+                      <span className="text-[10px] text-slate-500 mt-0.5">
+                        Klik untuk memilih file gambar dari komputer (PNG, JPG, WebP, SVG)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1135,10 +1351,20 @@ export function MasterSponsorshipView({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5"
+                  disabled={isUploadingLogo}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:opacity-60 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{editingSponsor ? 'Simpan Perubahan Sponsor' : 'Simpan Sponsor ke Database'}</span>
+                  {isUploadingLogo ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Mengunggah Logo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{editingSponsor ? 'Simpan Perubahan Sponsor' : 'Simpan Sponsor ke Database'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

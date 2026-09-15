@@ -508,6 +508,7 @@ export interface SponsorshipItem {
   inKindDetails?: string;
   contractNumber?: string;
   contractDate?: string;
+  logoUrl?: string;
   notes?: string;
 }
 

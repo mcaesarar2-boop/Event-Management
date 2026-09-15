@@ -48,14 +48,28 @@ import {
   SEED_SPONSORSHIPS,
 } from './seed';
 
+import {
+  clientsService,
+  venuesService,
+  vendorsService,
+  eventsService,
+  sponsorshipsService,
+  artistsService,
+  tasksService,
+  budgetService,
+  purchaseOrdersService,
+  revenuesService,
+} from '@/lib/supabase/services';
+
 let idCounter = 0;
 export function generateUniqueId(prefix: string): string {
   idCounter += 1;
   return `${prefix}-${Date.now()}-${idCounter}-${Math.random().toString(36).substring(2, 7)}`;
 }
 
-// Singleton in-memory relational state
+// Singleton state with cloud Supabase synchronization
 class EventSystemStore {
+  private isSupabaseLoaded = false;
   private users: UserAccount[] = [...SEED_USERS];
   private clients: Client[] = [...SEED_CLIENTS];
   private venues: Venue[] = [...SEED_VENUES];
@@ -63,6 +77,53 @@ class EventSystemStore {
   private templates: EventTemplate[] = [...SEED_TEMPLATES];
   private events: Event[] = [...SEED_EVENTS];
   private budgetItems: BudgetItem[] = SEED_BUDGET_ITEMS.filter((b) => !b.eventId || SEED_EVENTS.some((e) => e.id === b.eventId));
+
+  async initFromSupabase(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    try {
+      const [
+        remoteClients,
+        remoteVenues,
+        remoteVendors,
+        remoteEvents,
+        remoteSponsorships,
+        remoteArtists,
+        remoteTasks,
+        remoteBudgets,
+        remotePOs,
+        remoteRevenues,
+      ] = await Promise.all([
+        clientsService.getAll(),
+        venuesService.getAll(),
+        vendorsService.getAll(),
+        eventsService.getAll(),
+        sponsorshipsService.getAll(),
+        artistsService.getAll(),
+        tasksService.getAll(),
+        budgetService.getAll(),
+        purchaseOrdersService.getAll(),
+        revenuesService.getAll(),
+      ]);
+
+      if (remoteClients.length > 0) this.clients = remoteClients;
+      if (remoteVenues.length > 0) this.venues = remoteVenues;
+      if (remoteVendors.length > 0) this.vendors = remoteVendors;
+      if (remoteEvents.length > 0) this.events = remoteEvents;
+      if (remoteSponsorships.length > 0) this.sponsorships = remoteSponsorships;
+      if (remoteArtists.length > 0) this.artists = remoteArtists;
+      if (remoteTasks.length > 0) this.tasks = remoteTasks;
+      if (remoteBudgets.length > 0) this.budgetItems = remoteBudgets;
+      if (remotePOs.length > 0) this.purchaseOrders = remotePOs;
+      if (remoteRevenues.length > 0) this.revenues = remoteRevenues;
+
+      this.isSupabaseLoaded = true;
+      console.log('EMS Supabase: Cloud data successfully synchronized!');
+      return true;
+    } catch (err) {
+      console.warn('EMS Supabase: Falling back to in-memory cache', err);
+      return false;
+    }
+  }
   private artists: Artist[] = SEED_ARTISTS.filter((a) => !a.eventId || SEED_EVENTS.some((e) => e.id === a.eventId));
   private quotations: VendorQuotation[] = [];
   private purchaseOrders: PurchaseOrder[] = SEED_PURCHASE_ORDERS.filter((p) => !p.eventId || SEED_EVENTS.some((e) => e.id === p.eventId));
@@ -165,6 +226,7 @@ class EventSystemStore {
     };
     this.clients.unshift(newClient);
     this.logAudit('CREATE', 'Client', newClient.id, undefined, `Created client ${newClient.company}`);
+    clientsService.insert(newClient).catch((err) => console.error('Supabase client insert error:', err));
     return newClient;
   }
 
@@ -184,6 +246,7 @@ class EventSystemStore {
       JSON.stringify({ company: prev.company, contactPerson: prev.contactPerson }),
       JSON.stringify({ company: updated.company, contactPerson: updated.contactPerson })
     );
+    clientsService.update(id, data).catch((err) => console.error('Supabase client update error:', err));
     return updated;
   }
 
@@ -192,6 +255,7 @@ class EventSystemStore {
     if (idx === -1) return false;
     const removed = this.clients.splice(idx, 1)[0];
     this.logAudit('DELETE', 'Client', id, undefined, `Deleted client ${removed.company}`);
+    clientsService.delete(id).catch((err) => console.error('Supabase client delete error:', err));
     return true;
   }
 
@@ -211,6 +275,7 @@ class EventSystemStore {
     };
     this.venues.unshift(newVenue);
     this.logAudit('CREATE', 'Venue', newVenue.id, undefined, `Created venue ${newVenue.name}`);
+    venuesService.insert(newVenue).catch((err) => console.error('Supabase venue insert error:', err));
     return newVenue;
   }
 
@@ -224,6 +289,7 @@ class EventSystemStore {
     };
     this.venues[idx] = updated;
     this.logAudit('UPDATE', 'Venue', id, undefined, `Updated venue ${updated.name}`);
+    venuesService.update(id, data).catch((err) => console.error('Supabase venue update error:', err));
     return updated;
   }
 
@@ -232,6 +298,7 @@ class EventSystemStore {
     if (idx === -1) return false;
     const deleted = this.venues.splice(idx, 1)[0];
     this.logAudit('DELETE', 'Venue', id, undefined, `Deleted venue ${deleted.name}`);
+    venuesService.delete(id).catch((err) => console.error('Supabase venue delete error:', err));
     return true;
   }
 
@@ -332,6 +399,7 @@ class EventSystemStore {
     }
 
     this.logAudit('CREATE', 'Event', newEvent.id, undefined, `Created event ${newEvent.name} (${newEvent.code})`);
+    eventsService.insert(newEvent).catch((err) => console.error('Supabase event insert error:', err));
     return this.hydrateEventRollup(newEvent);
   }
 
@@ -352,6 +420,7 @@ class EventSystemStore {
       JSON.stringify({ status: prev.status, name: prev.name }),
       JSON.stringify({ status: updated.status, name: updated.name })
     );
+    eventsService.update(id, data).catch((err) => console.error('Supabase event update error:', err));
     return this.hydrateEventRollup(updated);
   }
 
@@ -361,6 +430,7 @@ class EventSystemStore {
     // Archive rather than delete to maintain auditability
     this.events[idx].status = 'ARCHIVED';
     this.logAudit('STATUS_CHANGE', 'Event', id, undefined, 'Status set to ARCHIVED');
+    eventsService.update(id, { status: 'ARCHIVED' }).catch((err) => console.error('Supabase event archive error:', err));
     return true;
   }
 
@@ -379,6 +449,7 @@ class EventSystemStore {
     this.documents = this.documents.filter((d) => d.eventId !== id);
     this.requirements = this.requirements.filter((r) => r.eventId !== id);
     this.logAudit('DELETE', 'Event', id, undefined, `Completely purged event ${id}`);
+    eventsService.delete(id).catch((err) => console.error('Supabase event delete error:', err));
     return true;
   }
 
@@ -539,6 +610,7 @@ class EventSystemStore {
 
     this.budgetItems.unshift(newItem);
     this.logAudit('CREATE', 'BudgetItem', newItem.id, undefined, `Created budget item: ${newItem.description} (Rp ${estTotal.toLocaleString('id-ID')})`, item.eventId);
+    budgetService.insert(newItem).catch((err) => console.error('Supabase budget insert error:', err));
     return newItem;
   }
 
@@ -566,6 +638,7 @@ class EventSystemStore {
 
     this.budgetItems[idx] = updated;
     this.logAudit('UPDATE', 'BudgetItem', id, `actualTotal: ${prev.actualTotal}`, `actualTotal: ${actTotal}`, updated.eventId);
+    budgetService.update(id, data).catch((err) => console.error('Supabase budget update error:', err));
     return updated;
   }
 
@@ -575,6 +648,7 @@ class EventSystemStore {
     const deleted = this.budgetItems[idx];
     this.budgetItems.splice(idx, 1);
     this.logAudit('DELETE', 'BudgetItem', id, undefined, `Deleted budget line ${deleted.description}`, deleted.eventId);
+    budgetService.delete(id).catch((err) => console.error('Supabase budget delete error:', err));
     return true;
   }
 
@@ -591,6 +665,7 @@ class EventSystemStore {
     };
     this.artists.unshift(newArtist);
     this.logAudit('CREATE', 'Artist', newArtist.id, undefined, `Added artist ${newArtist.name}`, newArtist.eventId);
+    artistsService.insert(newArtist).catch((err) => console.error('Supabase artist insert error:', err));
     return newArtist;
   }
 
@@ -603,6 +678,7 @@ class EventSystemStore {
     };
     this.artists[idx] = updated;
     this.logAudit('UPDATE', 'Artist', id, undefined, `Updated artist ${updated.name}`, updated.eventId);
+    artistsService.update(id, data).catch((err) => console.error('Supabase artist update error:', err));
     return updated;
   }
 
@@ -612,6 +688,7 @@ class EventSystemStore {
     const deleted = this.artists[idx];
     this.artists.splice(idx, 1);
     this.logAudit('DELETE', 'Artist', id, undefined, `Removed artist ${deleted.name}`, deleted.eventId);
+    artistsService.delete(id).catch((err) => console.error('Supabase artist delete error:', err));
     return true;
   }
 
@@ -628,6 +705,7 @@ class EventSystemStore {
     };
     this.vendors.unshift(newVendor);
     this.logAudit('CREATE', 'Vendor', newVendor.id, undefined, `Created vendor ${newVendor.company}`);
+    vendorsService.insert(newVendor).catch((err) => console.error('Supabase vendor insert error:', err));
     return newVendor;
   }
 
@@ -641,6 +719,7 @@ class EventSystemStore {
     };
     this.vendors[idx] = updated;
     this.logAudit('UPDATE', 'Vendor', id, undefined, `Updated vendor ${updated.company}`);
+    vendorsService.update(id, data).catch((err) => console.error('Supabase vendor update error:', err));
     return updated;
   }
 
@@ -649,6 +728,7 @@ class EventSystemStore {
     if (idx === -1) return false;
     const deleted = this.vendors.splice(idx, 1)[0];
     this.logAudit('DELETE', 'Vendor', id, undefined, `Deleted vendor ${deleted.company}`);
+    vendorsService.delete(id).catch((err) => console.error('Supabase vendor delete error:', err));
     return true;
   }
 
@@ -668,6 +748,7 @@ class EventSystemStore {
     };
     this.purchaseOrders.unshift(newPO);
     this.logAudit('CREATE', 'PurchaseOrder', newPO.id, undefined, `Created PO ${poNumber} for ${newPO.vendorName}`, newPO.eventId);
+    purchaseOrdersService.insert(newPO).catch((err) => console.error('Supabase PO insert error:', err));
     return newPO;
   }
 
@@ -677,6 +758,7 @@ class EventSystemStore {
     const prev = po.status;
     po.status = status;
     this.logAudit('STATUS_CHANGE', 'PurchaseOrder', id, prev, status, po.eventId);
+    purchaseOrdersService.updateStatus(id, status).catch((err) => console.error('Supabase PO update error:', err));
     return po;
   }
 
@@ -695,6 +777,7 @@ class EventSystemStore {
     };
     this.revenues.unshift(newRev);
     this.logAudit('CREATE', 'RevenueItem', newRev.id, undefined, `Created revenue line ${newRev.description}`, newRev.eventId);
+    revenuesService.insert(newRev).catch((err) => console.error('Supabase revenue insert error:', err));
     return newRev;
   }
 
@@ -711,10 +794,11 @@ class EventSystemStore {
   createSponsorship(item: Omit<SponsorshipItem, 'id'>): SponsorshipItem {
     const newSponsor: SponsorshipItem = {
       ...item,
-      id: generateUniqueId('sps'),
+      id: generateUniqueId('spn'),
     };
     this.sponsorships.unshift(newSponsor);
     this.logAudit('CREATE', 'Sponsorship', newSponsor.id, undefined, `Added sponsorship partner ${newSponsor.sponsorName} (${newSponsor.tier})`, newSponsor.eventId || undefined);
+    sponsorshipsService.insert(newSponsor).catch((err) => console.error('Supabase sponsorship insert error:', err));
     return newSponsor;
   }
 
@@ -728,6 +812,7 @@ class EventSystemStore {
     };
     this.sponsorships[idx] = updated;
     this.logAudit('UPDATE', 'Sponsorship', id, undefined, `Updated sponsorship partner ${updated.sponsorName} (${updated.tier})`, updated.eventId || undefined);
+    sponsorshipsService.update(id, data).catch((err) => console.error('Supabase sponsorship update error:', err));
     return updated;
   }
 
@@ -736,6 +821,7 @@ class EventSystemStore {
     if (idx === -1) return false;
     const deleted = this.sponsorships.splice(idx, 1)[0];
     this.logAudit('DELETE', 'Sponsorship', id, undefined, `Removed sponsorship partner ${deleted.sponsorName}`, deleted.eventId || undefined);
+    sponsorshipsService.delete(id).catch((err) => console.error('Supabase sponsorship delete error:', err));
     return true;
   }
 
@@ -796,6 +882,7 @@ class EventSystemStore {
     };
     this.tasks.unshift(newTask);
     this.logAudit('CREATE', 'Task', newTask.id, undefined, `Created task ${newTask.name}`, newTask.eventId);
+    tasksService.insert(newTask).catch((err) => console.error('Supabase task insert error:', err));
     return newTask;
   }
 
@@ -805,6 +892,7 @@ class EventSystemStore {
     const prev = task.status;
     task.status = status;
     this.logAudit('STATUS_CHANGE', 'Task', id, prev, status, task.eventId);
+    tasksService.updateStatus(id, status).catch((err) => console.error('Supabase task status update error:', err));
     return task;
   }
 
@@ -822,6 +910,7 @@ class EventSystemStore {
     const task = this.tasks[idx];
     this.tasks.splice(idx, 1);
     this.logAudit('DELETE', 'Task', id, undefined, `Deleted task ${task.name}`, task.eventId);
+    tasksService.delete(id).catch((err) => console.error('Supabase task delete error:', err));
     return true;
   }
 

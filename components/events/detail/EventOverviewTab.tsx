@@ -345,42 +345,67 @@ export function EventOverviewTab({
 
               {/* Sponsor Grid Items Preview */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                {list.slice(0, 6).map((sp, idx) => (
-                  <div
-                    key={`${sp.id || 'sp'}-${idx}`}
-                    onClick={() => onNavigateTab('SPONSORSHIP')}
-                    className="p-3 bg-slate-950/50 hover:bg-slate-800/50 border border-slate-800 rounded-xl cursor-pointer transition flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-1.5">
-                        <span className="font-bold text-xs text-white group-hover:text-indigo-300 transition truncate">
-                          {sp.brandName || sp.sponsorName}
-                        </span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase shrink-0 ${
-                            sp.type === 'CASH'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
-                          }`}
-                        >
-                          {sp.type === 'CASH' ? 'Cash' : 'In-Kind'}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-amber-300/90 font-medium truncate mt-0.5">
-                        {sp.tier}
-                      </div>
-                    </div>
+                {list.slice(0, 6).map((sp, idx) => {
+                  const initial = (sp.brandName || sp.sponsorName || 'SP')
+                    .replace(/^PT\.?\s+/i, '')
+                    .trim()
+                    .slice(0, 2)
+                    .toUpperCase();
 
-                    <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                      <span className="font-mono font-bold text-slate-200">
-                        {formatIDR(sp.contributionValue)}
-                      </span>
-                      <span className="text-[10px] text-slate-400 group-hover:text-white transition flex items-center gap-0.5">
-                        Detail <ChevronRight className="w-3 h-3" />
-                      </span>
+                  return (
+                    <div
+                      key={`${sp.id || 'sp'}-${idx}`}
+                      onClick={() => onNavigateTab('SPONSORSHIP')}
+                      className="p-3 bg-slate-950/50 hover:bg-slate-800/50 border border-slate-800 rounded-xl cursor-pointer transition flex flex-col justify-between group shadow-sm"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                          {sp.logoUrl ? (
+                            <img
+                              src={sp.logoUrl}
+                              alt={sp.brandName || sp.sponsorName}
+                              className="w-full h-full object-contain"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-xs font-bold text-indigo-400">
+                              {initial}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <span className="font-bold text-xs text-white group-hover:text-indigo-300 transition truncate">
+                              {sp.brandName || sp.sponsorName}
+                            </span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase shrink-0 ${
+                                sp.type === 'CASH'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
+                              }`}
+                            >
+                              {sp.type === 'CASH' ? 'Cash' : 'In-Kind'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-amber-300/90 font-medium truncate mt-0.5">
+                            {sp.tier}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
+                        <span className="font-mono font-bold text-slate-200">
+                          {formatIDR(sp.contributionValue)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 group-hover:text-white transition flex items-center gap-0.5">
+                          Detail <ChevronRight className="w-3 h-3" />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );

@@ -119,6 +119,19 @@ export default function HomePage() {
     setRevision((r) => r + 1);
   };
 
+  // Sync with Supabase on initial load
+  useEffect(() => {
+    let mounted = true;
+    db.initFromSupabase().then(() => {
+      if (mounted) {
+        setRevision((r) => r + 1);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Handlers for Event Selection
   const handleSelectEvent = (id: string | undefined) => {
     setSelectedEventId(id);

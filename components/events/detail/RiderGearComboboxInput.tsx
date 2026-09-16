@@ -100,6 +100,8 @@ export function RiderGearComboboxInput({
     const trimmed = query.trim();
     if (!trimmed || trimmed.length < 2) return;
 
+    let isMounted = true;
+
     const timer = setTimeout(async () => {
       try {
         const supabase = createBrowserClient();
@@ -117,6 +119,8 @@ export function RiderGearComboboxInput({
           `)
           .or(`name.ilike.%${trimmed}%,code.ilike.%${trimmed}%`)
           .limit(25);
+
+        if (!isMounted) return;
 
         if (!error && data && data.length > 0) {
           setAllInventory((prev) => {
@@ -146,7 +150,10 @@ export function RiderGearComboboxInput({
       }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      isMounted = false;
+    };
   }, [query]);
 
   // Close dropdown when clicking outside

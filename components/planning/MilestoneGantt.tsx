@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarCheck,
   Clock,
@@ -51,6 +51,12 @@ export function MilestoneGantt({
   const [selectedEventId, setSelectedEventId] = useState<string>(
     events[0]?.id || 'ALL'
   );
+
+  useEffect(() => {
+    if (events.length > 0 && selectedEventId === 'ALL') {
+      setSelectedEventId(events[0].id);
+    }
+  }, [events, selectedEventId]);
   const [zoomScale, setZoomScale] = useState<'DAYS' | 'WEEKS'>('DAYS');
   const [currentTimestamp] = useState(() => Date.now());
 

@@ -217,8 +217,8 @@ export function MasterFinanceView({
                 {filteredEvents.map((evt) => {
                   const evBudgets = budgetItems.filter((b) => b.eventId === evt.id);
                   const evRevenues = revenues.filter((r) => r.eventId === evt.id);
-                  const actCost = evBudgets.reduce((s, b) => s + (b.actualTotal || 0), 0) || evt.actualCost;
-                  const revContract = evRevenues.reduce((s, r) => s + (r.actualRevenue || 0), 0) || evt.actualRevenue;
+                  const actCost = evBudgets.reduce((s, b) => s + (b.actualTotal ?? 0), 0) || (evt.actualCost ?? 0);
+                  const revContract = evRevenues.reduce((s, r) => s + (r.actualRevenue ?? 0), 0) || (evt.actualRevenue ?? 0);
                   const profit = revContract - actCost;
                   const margin = revContract > 0 ? ((profit / revContract) * 100).toFixed(1) : '0';
 

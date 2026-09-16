@@ -105,16 +105,16 @@ class EventSystemStore {
         revenuesService.getAll(),
       ]);
 
-      if (remoteClients.length > 0) this.clients = remoteClients;
-      if (remoteVenues.length > 0) this.venues = remoteVenues;
-      if (remoteVendors.length > 0) this.vendors = remoteVendors;
-      if (remoteEvents.length > 0) this.events = remoteEvents;
-      if (remoteSponsorships.length > 0) this.sponsorships = remoteSponsorships;
-      if (remoteArtists.length > 0) this.artists = remoteArtists;
-      if (remoteTasks.length > 0) this.tasks = remoteTasks;
-      if (remoteBudgets.length > 0) this.budgetItems = remoteBudgets;
-      if (remotePOs.length > 0) this.purchaseOrders = remotePOs;
-      if (remoteRevenues.length > 0) this.revenues = remoteRevenues;
+      this.clients = remoteClients;
+      this.venues = remoteVenues;
+      this.vendors = remoteVendors;
+      this.events = remoteEvents;
+      this.sponsorships = remoteSponsorships;
+      this.artists = remoteArtists;
+      this.tasks = remoteTasks;
+      this.budgetItems = remoteBudgets;
+      this.purchaseOrders = remotePOs;
+      this.revenues = remoteRevenues;
 
       this.isSupabaseLoaded = true;
       console.log('EMS Supabase: Cloud data successfully synchronized!');
@@ -448,6 +448,7 @@ class EventSystemStore {
     this.payments = this.payments.filter((p) => p.eventId !== id);
     this.documents = this.documents.filter((d) => d.eventId !== id);
     this.requirements = this.requirements.filter((r) => r.eventId !== id);
+    this.sponsorships = this.sponsorships.filter((s) => s.eventId !== id);
     this.logAudit('DELETE', 'Event', id, undefined, `Completely purged event ${id}`);
     eventsService.delete(id).catch((err) => console.error('Supabase event delete error:', err));
     return true;
@@ -467,6 +468,7 @@ class EventSystemStore {
     this.payments = [];
     this.documents = [];
     this.requirements = [];
+    this.sponsorships = [];
     this.logAudit('DELETE', 'Event', 'ALL', undefined, 'Cleared all events for fresh start');
   }
 
@@ -581,11 +583,11 @@ class EventSystemStore {
 
     return {
       ...evt,
-      estimatedCost: estimatedCost || evt.estimatedCost,
-      actualCost: actualCost || evt.actualCost,
-      committedCost: committedCost || evt.committedCost,
-      actualRevenue: actualRevenue || evt.actualRevenue,
-      receivedRevenue: receivedRevenue || evt.receivedRevenue,
+      estimatedCost: estimatedCost ?? evt.estimatedCost,
+      actualCost: actualCost ?? evt.actualCost,
+      committedCost: committedCost ?? evt.committedCost,
+      actualRevenue: actualRevenue ?? evt.actualRevenue,
+      receivedRevenue: receivedRevenue ?? evt.receivedRevenue,
     };
   }
 
@@ -596,8 +598,8 @@ class EventSystemStore {
   }
 
   createBudgetItem(item: Omit<BudgetItem, 'id' | 'variance'>): BudgetItem {
-    const estTotal = (item.quantity || 1) * (item.estimatedUnitCost || 0);
-    const actTotal = (item.quantity || 1) * (item.actualUnitCost || 0);
+    const estTotal = (item.quantity ?? 1) * (item.estimatedUnitCost ?? 0);
+    const actTotal = (item.quantity ?? 1) * (item.actualUnitCost ?? 0);
     const variance = estTotal - actTotal;
 
     const newItem: BudgetItem = {

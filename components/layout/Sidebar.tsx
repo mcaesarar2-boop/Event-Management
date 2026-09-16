@@ -23,6 +23,7 @@ import {
   X,
   Handshake,
 } from 'lucide-react';
+import packageInfo from '@/package.json';
 
 export type NavigationItem =
   | 'GLOBAL_DASHBOARD'
@@ -247,7 +248,7 @@ export function Sidebar({
               <div className="font-semibold text-sm tracking-wide text-slate-100 flex items-center gap-1.5">
                 EMS Enterprise
                 <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800/50">
-                  v1.6.1
+                  v{packageInfo.version}
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 font-medium">Event Management Brain</div>

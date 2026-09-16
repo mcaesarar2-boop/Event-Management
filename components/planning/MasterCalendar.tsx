@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -94,6 +94,11 @@ export function MasterCalendar({
 
   const [currentYear, setCurrentYear] = useState<number>(defaultDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(defaultDate.getMonth()); // 0-indexed
+
+  useEffect(() => {
+    setCurrentYear(defaultDate.getFullYear());
+    setCurrentMonth(defaultDate.getMonth());
+  }, [defaultDate]);
 
   // Transform events and tasks into calendar entries
   const allEntries = useMemo(() => {

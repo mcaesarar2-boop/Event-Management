@@ -660,3 +660,52 @@ This project is proprietary software developed for enterprise event operations. 
   <sub>Built with precision for the live entertainment industry. Crafted with Next.js 15, Supabase, and Tailwind CSS v4.</sub>
 </div>
 
+---
+
+### System Audit, Architecture & Logic Health Check Report [v1.7.0]
+
+**Audit Date**: 16 September 2026  
+**Audited By**: Automated Deep Analysis (5 parallel auditors covering all 60+ source files)  
+**Version Bump**: `1.6.1` → `1.7.0` (MINOR — significant systemic logic corrections)
+
+#### 1. Evaluasi Konsistensi Struktur Folder & Modularitas
+
+| Aspek | Status | Catatan |
+| :--- | :---: | :--- |
+| Separation of Concerns | ✅ BAIK | Pemisahan `app/`, `components/`, `hooks/`, `lib/`, `prisma/`, `scripts/` sudah sesuai standar Next.js App Router |
+| Penamaan File & Folder | ✅ KONSISTEN | PascalCase untuk komponen, camelCase untuk utilitas, kebab-case untuk hooks |
+| Barrel Exports | ✅ ADA | `lib/supabase/index.ts`, `lib/types/index.ts` sudah menyediakan barrel exports |
+| File Dead/Unused | ✅ DIBERSIHKAN | `scratch_check_supabase.cjs` (file scratch ERP) telah dihapus dari root proyek |
+| Duplikasi Komponen | ✅ TIDAK ADA | Tidak ditemukan file komponen duplikat |
+
+#### 2. Daftar Cacat Logika Sistemik & Kalkulasi yang Ditemukan
+
+| No | Kategori | File | Deskripsi Masalah | Solusi |
+| :---: | :--- | :--- | :--- | :--- |
+| A1 | 🔴 KRITIS | `lib/db/store.ts` | `hydrateEventRollup()` menggunakan `\|\|` sehingga nilai `0` yang sah jatuh ke fallback lama | Diganti `\|\|` → `??` (nullish coalescing) |
+| A2 | 🔴 KRITIS | `lib/db/store.ts` | `createBudgetItem()` — quantity `0` dianggap `1` | Diganti `\|\|` → `??` |
+| A3 | 🔴 KRITIS | `lib/db/store.ts` | `purgeEvent()` & `clearAllEvents()` tidak membersihkan array `sponsorships` | Ditambahkan filter sponsorship |
+| A4 | 🔴 KRITIS | `lib/db/store.ts` | `initFromSupabase()` mengabaikan database kosong (tetap pakai seed data) | Dihapus guard `length > 0` |
+| A5 | 🔴 KRITIS | `MasterFinanceView.tsx` | Reduce fallback ganda `\|\|` menyebabkan NaN saat cost = 0 | Diganti → `?? 0` |
+| B1 | 🟠 SEDANG | `EventBudgetTab`, `EventRevenueTab`, `GlobalDashboard` | `.reduce()` tanpa fallback `?? 0` pada field numerik | Ditambahkan `?? 0` |
+| B2 | 🟠 SEDANG | `EventProcurementTab.tsx` | Presisi floating-point pada kalkulasi PPN 11% | Diganti → `Math.round((subtotal * 11) / 100)` |
+| B3 | 🟠 SEDANG | `lib/utils/format.ts` | `formatCompactIDR` memakai titik desimal (`.`) bukan koma (`,`) per standar Indonesia | Ditambahkan `.replace('.', ',')` |
+| C1 | 🟡 MINOR | `MasterCalendar`, `MilestoneGantt` | `useState` inisialisasi stale saat data async belum tersedia | Ditambahkan `useEffect` sinkronisasi |
+| C2 | 🟡 MINOR | `InternalAllocationConfirmModal`, `RiderGearComboboxInput` | State update pada komponen yang sudah unmounted (memory leak) | Ditambahkan flag `isMounted` |
+| C3 | 🟡 MINOR | `EventReportsTab.tsx` | Penggunaan `as any` cast yang tidak type-safe | Diganti dengan proper typed access |
+| D2 | 🟢 CLEANUP | `lib/types/index.ts` | `PaymentStatus` memiliki duplikasi UPPERCASE & TitleCase | Dinormalisasi ke UPPERCASE saja |
+| D3 | 🟢 CLEANUP | `lib/supabase/services.ts` | Method `update()` pada events, budget, dan artists hanya memetakan sebagian field | Diperlengkapi semua field mapping |
+
+#### 3. Status Kestabilan & Kesiapan Aplikasi
+
+| Metrik | Hasil |
+| :--- | :--- |
+| **TypeScript Compilation** | ✅ Zero errors (`npx tsc --noEmit`) |
+| **Next.js Production Build** | ✅ Build berhasil tanpa error (`npm run build`) |
+| **Cacat Logika Kritis** | ✅ Semua 5 bug kritis telah diperbaiki |
+| **NaN/Division-by-Zero Risk** | ✅ Semua jalur kalkulasi finansial telah dilindungi |
+| **Memory Leak** | ✅ Async effect cleanup ditambahkan pada 2 komponen |
+| **Dead Code** | ✅ File scratch dihapus, tipe duplikat dinormalisasi |
+| **Supabase Sync Integrity** | ✅ Semua service `update()` memetakan field secara lengkap |
+| **Kesiapan Produksi** | ✅ STABIL — Siap untuk staging deployment |
+

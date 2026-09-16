@@ -72,6 +72,7 @@ export function InternalAllocationConfirmModal({
   const [isLoadingStock, setIsLoadingStock] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (gearItem) {
       setQuantity(gearItem.quantity || 1);
       setPlacementArea(gearItem.placementArea || 'Main Stage');
@@ -87,6 +88,7 @@ export function InternalAllocationConfirmModal({
           .eq('id', gearItem.itemId)
           .single()
           .then(({ data, error }) => {
+            if (!isMounted) return;
             if (!error && data) {
               const total = data.quantity || 0;
               const rented = data.rentedQuantity || 0;
@@ -112,6 +114,7 @@ export function InternalAllocationConfirmModal({
           .limit(1)
           .maybeSingle()
           .then(({ data, error }) => {
+            if (!isMounted) return;
             if (!error && data) {
               const total = data.quantity || 0;
               const rented = data.rentedQuantity || 0;
@@ -131,6 +134,9 @@ export function InternalAllocationConfirmModal({
         setStockInfo(null);
       }
     }
+    return () => {
+      isMounted = false;
+    };
   }, [gearItem]);
 
   if (!isOpen || !gearItem) return null;

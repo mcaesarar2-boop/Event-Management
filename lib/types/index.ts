@@ -149,12 +149,6 @@ export type PaymentStatus =
   | 'PAID'
   | 'OVERDUE'
   | 'CANCELLED'
-  | 'Pending'
-  | 'Paid'
-  | 'Overdue'
-  | 'Scheduled'
-  | 'Partially Paid'
-  | 'Cancelled'
   | (string & {});
 
 export type ApprovalStatus =

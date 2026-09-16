@@ -49,7 +49,7 @@ export function EventProcurementTab({
     e.preventDefault();
     const vendor = vendors.find((v) => v.id === vendorId) || vendors[0];
     const subtotal = itemQty * itemUnitPrice;
-    const tax = Math.round(subtotal * 0.11);
+    const tax = Math.round((subtotal * 11) / 100);
     const total = subtotal + tax;
 
     onCreatePO({

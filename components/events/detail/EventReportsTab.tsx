@@ -30,8 +30,8 @@ export function EventReportsTab({
   risks,
 }: EventReportsTabProps) {
   const totalRevenue = revenueItems.reduce((sum, r) => sum + (r.actualRevenue || 0), 0);
-  const totalActualCost = budgetItems.reduce((sum, b) => sum + (b.actualTotal ?? (b as any).actualCost ?? 0), 0);
-  const totalEstimatedCost = budgetItems.reduce((sum, b) => sum + (b.estimatedTotal ?? (b as any).estimatedCost ?? 0), 0);
+  const totalActualCost = budgetItems.reduce((sum, b) => sum + (b.actualTotal ?? 0), 0);
+  const totalEstimatedCost = budgetItems.reduce((sum, b) => sum + (b.estimatedTotal ?? 0), 0);
   const grossProfit = totalRevenue - totalActualCost;
   const profitMargin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : '0';
   const costVariance = totalEstimatedCost - totalActualCost;
@@ -57,14 +57,14 @@ export function EventReportsTab({
       `Category,Description,Target,Actual Contract,Received`,
       ...revenueItems.map(
         (r) =>
-          `"${r.category}","${r.description.replace(/"/g, '""')}",${r.estimatedRevenue ?? (r as any).targetRevenue ?? 0},${r.actualRevenue},${r.received}`
+          `"${r.category}","${r.description.replace(/"/g, '""')}",${r.estimatedRevenue ?? r.targetRevenue ?? r.actualRevenue ?? 0},${r.actualRevenue},${r.received}`
       ),
       ``,
       `EXPENSE BREAKDOWN`,
       `Category,Line Item,Estimated,Actual,Variance`,
       ...budgetItems.map(
         (b) =>
-          `"${b.category}","${(b.description || (b as any).name || 'Item').replace(/"/g, '""')}",${b.estimatedTotal ?? (b as any).estimatedCost ?? 0},${b.actualTotal ?? (b as any).actualCost ?? 0},${b.variance}`
+          `"${b.category}","${(b.description || 'Item').replace(/"/g, '""')}",${b.estimatedTotal ?? 0},${b.actualTotal ?? 0},${b.variance}`
       ),
     ];
 
@@ -197,10 +197,10 @@ export function EventReportsTab({
             {budgetItems.map((b) => (
               <div key={b.id} className="flex items-center justify-between">
                 <div>
-                  <span className="font-semibold text-slate-200">{b.description || (b as any).name || 'Item'}</span>
+                  <span className="font-semibold text-slate-200">{b.description || 'Item'}</span>
                   <span className="text-slate-500 ml-2">({b.category})</span>
                 </div>
-                <div className="font-mono text-slate-200">{formatIDR(b.actualTotal ?? (b as any).actualCost ?? 0)}</div>
+                <div className="font-mono text-slate-200">{formatIDR(b.actualTotal ?? 0)}</div>
               </div>
             ))}
           </div>

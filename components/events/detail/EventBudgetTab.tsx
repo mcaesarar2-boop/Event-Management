@@ -43,8 +43,8 @@ export function EventBudgetTab({
   const [notes, setNotes] = useState('');
 
   // Computations
-  const totalEstimated = budgetItems.reduce((sum, b) => sum + b.estimatedTotal, 0);
-  const totalActual = budgetItems.reduce((sum, b) => sum + b.actualTotal, 0);
+  const totalEstimated = budgetItems.reduce((sum, b) => sum + (b.estimatedTotal ?? 0), 0);
+  const totalActual = budgetItems.reduce((sum, b) => sum + (b.actualTotal ?? 0), 0);
   const totalVariance = totalEstimated - totalActual;
   const isOverallOverBudget = totalActual > event.totalBudget;
 

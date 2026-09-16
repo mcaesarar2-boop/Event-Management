@@ -12,10 +12,10 @@ export const formatRupiah = formatIDR;
 export function formatCompactIDR(amount: number = 0): string {
   if (isNaN(amount)) return 'Rp 0';
   if (Math.abs(amount) >= 1_000_000_000) {
-    return `Rp ${(amount / 1_000_000_000).toFixed(2)} M`;
+    return `Rp ${(amount / 1_000_000_000).toFixed(2).replace('.', ',')} M`;
   }
   if (Math.abs(amount) >= 1_000_000) {
-    return `Rp ${(amount / 1_000_000).toFixed(1)} Jt`;
+    return `Rp ${(amount / 1_000_000).toFixed(1).replace('.', ',')} Jt`;
   }
   return formatIDR(amount);
 }

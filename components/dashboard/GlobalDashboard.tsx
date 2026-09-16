@@ -54,9 +54,9 @@ export function GlobalDashboard({
     ['COMPLETED', 'SETTLEMENT', 'ARCHIVED'].includes(e.status)
   );
 
-  const totalBudget = events.reduce((sum, e) => sum + e.totalBudget, 0);
-  const totalActualCost = events.reduce((sum, e) => sum + e.actualCost, 0);
-  const totalRevenue = events.reduce((sum, e) => sum + e.actualRevenue, 0);
+  const totalBudget = events.reduce((sum, e) => sum + (e.totalBudget ?? 0), 0);
+  const totalActualCost = events.reduce((sum, e) => sum + (e.actualCost ?? 0), 0);
+  const totalRevenue = events.reduce((sum, e) => sum + (e.actualRevenue ?? 0), 0);
   const totalProfit = totalRevenue - totalActualCost;
   const avgMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0';
 

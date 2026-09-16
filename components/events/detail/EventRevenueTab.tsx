@@ -37,9 +37,9 @@ export function EventRevenueTab({
   const [status, setStatus] = useState<RevenueItem['status']>('Partial');
 
   const totalTarget = revenues.reduce((sum, r) => sum + (r.targetRevenue ?? r.estimatedRevenue ?? 0), 0);
-  const totalActual = revenues.reduce((sum, r) => sum + r.actualRevenue, 0);
-  const totalReceived = revenues.reduce((sum, r) => sum + r.received, 0);
-  const totalOutstanding = revenues.reduce((sum, r) => sum + r.outstanding, 0);
+  const totalActual = revenues.reduce((sum, r) => sum + (r.actualRevenue ?? 0), 0);
+  const totalReceived = revenues.reduce((sum, r) => sum + (r.received ?? 0), 0);
+  const totalOutstanding = revenues.reduce((sum, r) => sum + (r.outstanding ?? 0), 0);
 
   const categories: RevenueCategory[] = [
     'Sponsorship',
